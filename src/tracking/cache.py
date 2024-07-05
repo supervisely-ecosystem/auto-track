@@ -22,7 +22,7 @@ def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
     else:
         task_id = nn_settings[geometry]["task_id"]
         sly.logger.debug("Cache video request", extra={"task_id": task_id, "geometry": geometry})
-        r = api.app.send_request(task_id, "smart_cache", state)
+        r = api.app.send_request(task_id, "smart_cache", state, retries=1)
         sly.logger.debug("Cache video response", extra={"response": r, "geometry": geometry})
 
 

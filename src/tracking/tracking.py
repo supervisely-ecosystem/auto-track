@@ -250,7 +250,7 @@ def predict_with_app(
         "input_geometries": geometries,
         # "direction": "forward"  # optional
     }
-    response = api.task.send_request(task_id, "track-api", {}, context=data)
+    response = api.task.send_request(task_id, "track-api", {}, context=data, retries=1)
 
     results = [
         [

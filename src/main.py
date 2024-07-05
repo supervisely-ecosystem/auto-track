@@ -16,6 +16,8 @@ def start_track(request: Request, task: BackgroundTasks):
     sly.logger.debug("recieved call to /track")
     nn_settings = get_nn_settings()
     api = request.state.api
+    if api is None:
+        api = g.api
     context = request.state.context
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
@@ -37,6 +39,8 @@ def start_cache_video(request: Request, task: BackgroundTasks):
     sly.logger.debug("recieved call to /cache_video")
     nn_settings = get_nn_settings()
     api = request.state.api
+    if api is None:
+        api = g.api
     state = request.state.state
     task.add_task(cache_video, api, state, nn_settings)
     return {"message": "Cache video task started."}
@@ -62,7 +66,9 @@ def smart_segmentation(request: Request):
         task_id = nn_settings["smarttool"]["task_id"]
         state = request.state.state
         context = request.state.context
-        return g.api.app.send_request(task_id, "smart_segmentation", data=state, context=context)
+        return g.api.app.send_request(
+            task_id, "smart_segmentation", data=state, context=context, retries=1
+        )
 
 
 @server.post("/continue_track")
@@ -70,6 +76,8 @@ def continue_track(request: Request, task: BackgroundTasks):
     sly.logger.debug("recieved call to /continue_track")
     nn_settings = get_nn_settings()
     api = request.state.api
+    if api is None:
+        api = g.api
     context = request.state.context
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
@@ -90,6 +98,8 @@ def objects_removed(request: Request, task: BackgroundTasks):
     sly.logger.debug("recieved call to /objects_removed")
     nn_settings = get_nn_settings()
     api = request.state.api
+    if api is None:
+        api = g.api
     context = request.state.context
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
