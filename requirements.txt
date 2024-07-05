@@ -1,0 +1,2 @@
+# supervisely==6.73.45
+git+https://github.com/supervisely/supervisely.git@gpu-cloud

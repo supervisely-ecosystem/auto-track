@@ -1,0 +1,13 @@
+services:
+  app:
+    image: supervisely/video-auto-track:test
+    build: .
+    environment:
+      SERVER_ADDRESS: http://test
+      MIXFORMER_URL: http://mixformer
+      XMEM_URL: http://xmem
+      COTRACKER_URL: http://cotracker
+      CLICKSEG_URL: http://clickseg
+      TEAM_ID: 2
+      WORKSPACE_ID: 2
+      API_TOKEN: ""

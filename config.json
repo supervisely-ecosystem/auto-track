@@ -1,0 +1,34 @@
+{
+  "type": "app",
+  "version": "2.0.0",
+  "name": "Auto Track",
+  "description": "Tracking settings for video annotation tool",
+  "docker_image": "supervisely/base-py-sdk:6.73.45",
+  "instance_version": "6.9.31",
+  "categories": ["videos", "labeling"],
+  "task_location": "application_sessions",
+  "icon": "",
+  "icon_cover": true,
+  "headless": false,
+  "poster": "",
+  "entrypoint": "python -m uvicorn src.main:app --host 0.0.0.0 --port 8000",
+  "port": 8000,
+  "session_tags": [
+    "sly_video_tracking",
+    "sly_smart_annotation"
+  ],
+  "allowed_shapes": [
+    "rectangle",
+    "bitmap",
+    "polygon",
+    "point",
+    "polyline",
+    "line",
+    "graph"
+  ],
+  "community_agent": false,
+  "is_auto_track": true,
+  "access_restriction": [{
+    "instance": "community_free"
+  }]
+}
