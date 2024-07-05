@@ -574,7 +574,7 @@ class Track:
             )
             if not self.can_continue:
                 return
-            if frame_index >= self.end_frame_index:
+            if frame_index > self.end_frame_index:
                 return
             if frame_index + frames_count <= self.end_frame_index:
                 return
@@ -1548,7 +1548,7 @@ def track(
 
         return
 
-    session_id = context.get("session_id", None)
+    session_id = context.get("sessionId", None)
     if session_id is None:
         api.logger.warn("Session id is not provided. Some features may not work correctly.")
     track_id = context["trackId"]
