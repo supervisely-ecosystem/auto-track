@@ -1543,10 +1543,9 @@ def track(
                 cur_track.init_frames_count,
                 update_type,
             )
+            return
         else:
             api.logger.info("Track not found.", extra={"track_id": track_id})
-
-        return
 
     session_id = context.get("sessionId", None)
     if session_id is None:
