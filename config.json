@@ -7,10 +7,10 @@
   "instance_version": "6.9.31",
   "categories": ["videos", "labeling"],
   "task_location": "application_sessions",
-  "icon": "",
+  "icon": "https://github.com/supervisely-ecosystem/auto-track/assets/119248312/505f620b-9ab6-4ddd-998f-6c3f82cce6b7",
   "icon_cover": true,
   "headless": false,
-  "poster": "",
+  "poster": "https://github.com/supervisely-ecosystem/auto-track/assets/119248312/c372ff77-4025-4e55-80b8-e821e31868e3",
   "entrypoint": "python -m uvicorn src.main:app --host 0.0.0.0 --port 8000",
   "port": 8000,
   "session_tags": [
