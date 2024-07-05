@@ -1437,6 +1437,7 @@ class Track:
                     },
                 },
             )
+            self.notify(task="Track", pos_increment=0)
 
             if self.cloud_token is not None and self.cloud_action_id is not None:
                 figures_count = sum(len(figures) for figures in figures_by_type.values())
