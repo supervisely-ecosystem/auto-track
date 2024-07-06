@@ -9,15 +9,15 @@ GEOMETRIES = (
     (
         sly.Rectangle.geometry_name(),
         {
-            "title": "Rectangle",
-            "description": "Select NN model for Rectangle figures",
+            "title": "Bounding Box",
+            "description": "Select NN model for Bounding box figures",
             "geometries": [sly.Rectangle.geometry_name()],
         },
     ),
     (
         sly.Point.geometry_name(),
         {
-            "title": "Point",
+            "title": "Point based geometries",
             "description": "Select NN model for Point, Polyline, Ploygon and Keypoints figures",
             "geometries": [
                 sly.Point.geometry_name(),
@@ -30,18 +30,18 @@ GEOMETRIES = (
     (
         sly.Bitmap.geometry_name(),
         {
-            "title": "Bitmap",
-            "description": "Select NN model for Bitmap figures",
+            "title": "Mask",
+            "description": "Select NN model for Mask figures",
             "geometries": [sly.Bitmap.geometry_name()],
         },
     ),
     (
         "smarttool",
         {
-            "title": "SmartTool",
+            "title": "Smart Tool",
             "description": (
-                "Select NN model for SmartTool. Box and points for smarttool annotation"
-                " will be predicted using NN models selected in the previous steps."
+                "Select NN model for SmartTool. When tracking Box and points for smarttool "
+                "annotation will be predicted using NN models selected in the previous steps."
             ),
             "geometries": ["smarttool"],
         },
@@ -50,8 +50,8 @@ GEOMETRIES = (
 EMPTY = Empty()
 DEPLOY_APPS_PARAMETERS = {nn.name: DeployAppParameters(nn) for nn in g.nns}
 DEPLOY_APP_BY_GEOMETRY = {
-    geometry_name: DeployAppByGeometry(geometry_name, DEPLOY_APPS_PARAMETERS)
-    for geometry_name, _ in GEOMETRIES
+    geometry_name: DeployAppByGeometry(geometry_name, details["title"], DEPLOY_APPS_PARAMETERS)
+    for geometry_name, details in GEOMETRIES
 }
 GEOMETRY_CARDS = {
     geometry_name: GeometryCard(

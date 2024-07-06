@@ -110,9 +110,11 @@ class DeployAppByGeometry:
     def __init__(
         self,
         geometry_name: str,
+        title: str,
         deploy_apps_parameters: Dict[str, DeployAppParameters],
     ):
         self._geometry_name = geometry_name
+        self._title = title
         self._nns = g.geometry_nn[geometry_name]
         self._deploy_apps_parameters = deploy_apps_parameters
         self._nn_selector = None
@@ -142,7 +144,7 @@ class DeployAppByGeometry:
         self._deploy_button.disable()
 
         self._dialog = Dialog(
-            title=f"Deploy New App for {self._geometry_name}",
+            title=f"Deploy New App for {self._title}",
             content=Container(
                 widgets=[
                     Field(title="Select NN model App", content=self._nn_selector),
