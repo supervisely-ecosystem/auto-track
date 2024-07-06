@@ -8,12 +8,12 @@ from .common import GEOMETRY_CARDS
 
 
 select_nn_settings_text = Text(
-    '<b style="margin-left: 20px">Select neural network settings:</b>',
+    "<b>Select neural network settings:</b>",
     font_size=21,
 )
 select_nn_settings_description_text = Text(
     (
-        '<b style="margin-left: 20px">Select NN model settings for each geometry type. '
+        "<b>Select NN model settings for each geometry type. "
         "This model will be used to track objects in Video Labeling Tool.</b>"
     ),
     font_size=15,
