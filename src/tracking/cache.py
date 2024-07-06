@@ -10,6 +10,11 @@ import src.globals as g
 def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
     if "url" in nn_settings[geometry]:
         url = nn_settings[geometry]["url"]
+        if url is None or url == "":
+            sly.logger.debug(
+                "Cache video is skipped because url is empty", extra={"geometry": geometry}
+            )
+            return
         sly.logger.debug("Cache video request", extra={"url": url, "geometry": geometry})
         r = requests.post(
             f"{url}/smart_cache",
@@ -21,6 +26,11 @@ def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
 
     else:
         task_id = nn_settings[geometry]["task_id"]
+        if task_id is None or task_id == "":
+            sly.logger.debug(
+                "Cache video is skipped because task_id is empty", extra={"geometry": geometry}
+            )
+            return
         sly.logger.debug("Cache video request", extra={"task_id": task_id, "geometry": geometry})
         r = api.app.send_request(task_id, "smart_cache", state, retries=1)
         sly.logger.debug("Cache video response", extra={"response": r, "geometry": geometry})
@@ -38,7 +48,7 @@ def cache_video(api: sly.Api, state: Dict, nn_settings: dict):
 
     sly.logger.debug(
         "Start caching video for this geometries",
-        extra={geom: nn_settings[geom] for geom in geometries},
+        extra={"geometries": geometries, "nn_settings": nn_settings},
     )
 
     geometries = list(geometries)

@@ -34,6 +34,10 @@ class ENV:
     def clickseg_url(cls) -> str:
         return os.getenv("CLICKSEG_URL", "http://clickseg")
 
+    @classmethod
+    def is_cloud(cls) -> bool:
+        sly.env.sly_cloud_server_address(raise_not_found=False) is not None
+
 
 class AppParameterDescription:
     def __init__(

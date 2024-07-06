@@ -1170,6 +1170,15 @@ class Track:
         with ThreadPoolExecutor(len(geom_types)) as executor:
             tasks_by_geom_type = {}
             for geom_type in geom_types:
+                if self.nn_settings.get(geom_type) is None:
+                    self.logger.warning("No settings for geometry type %s", geom_type)
+                    continue
+                if (
+                    "task_id" in self.nn_settings[geom_type]
+                    and self.nn_settings[geom_type]["task_id"] is None
+                ):
+                    self.logger.warning("No settings for geometry type %s", geom_type)
+                    continue
                 task = executor.submit(
                     self.run_geometry,
                     geometry_type=geom_type,
@@ -1419,6 +1428,15 @@ class Track:
             for timeline_index, (_, timeline_figures) in enumerate(timelines_data):
                 for timeline_figure in timeline_figures:
                     geom_name = get_figure_geometry_name(timeline_figure)
+                    if geom_name not in self.nn_settings:
+                        self.logger.warning("No settings for geometry type %s", geom_name)
+                        continue
+                    if (
+                        "task_id" in self.nn_settings[geom_name]
+                        and self.nn_settings[geom_name].get("task_id") is None
+                    ):
+                        self.logger.warning("No settings for geometry type %s", geom_name)
+                        continue
                     figures_by_type.setdefault(geom_name, []).append(timeline_figure)
                     timeline_index_by_type.setdefault(geom_name, []).append(timeline_index)
             get_batch_time = sly.TinyTimer.get_sec(tm)

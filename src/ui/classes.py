@@ -241,17 +241,18 @@ class GeometryCard:
         self.nn_url_input = Input(
             value=g.get_url_for_geometry(self.geometries[0]), placeholder="Enter url to model"
         )
-        self.select_nn = Select(
-            items=[
-                Select.Item("url", "Access to model by url", content=self.nn_url_input),
-                Select.Item(
-                    "app",
-                    "Deployed model session",
-                    content=select_nn_app_container,
-                    disabled=True,
-                ),
-            ]
-        )
+        select_nn_items = [
+            Select.Item("url", "Access to model by url", content=self.nn_url_input),
+            Select.Item(
+                "app",
+                "Deployed model session",
+                content=select_nn_app_container,
+                disabled=True,
+            ),
+        ]
+        if not g.ENV.is_cloud():
+            select_nn_items = select_nn_items[1:]
+        self.select_nn = Select(items=select_nn_items)
         select_nn_field = Field(self.select_nn, title="Select model for predictions")
         select_nn_one_of = OneOf(self.select_nn)
 
