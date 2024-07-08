@@ -20,23 +20,23 @@ This app offers a convinient way to apply tracking to the objects on video and s
 
 ### 1: Run the app from ecosystem
 
-<img src="https://private-user-images.githubusercontent.com/61844772/346250828-c38b4d5f-602d-443e-b345-9b2e6b98bc3c.png"/>
+<img src="https://github.com/supervisely-ecosystem/auto-track/assets/61844772/c38b4d5f-602d-443e-b345-9b2e6b98bc3c"/>
 
 ### 2: Select NN model app for geometries you want to track
 
 To track masks, annotated with `Smart Tool` you will need to select a model for the following geometries: `Bounding Box`, `Point` and `Smart Tool`.
 
-<img src="https://private-user-images.githubusercontent.com/61844772/346251266-ee1158d7-d9f4-4761-b514-c3f25fc6c8e5.png"/>
+<img src="https://github.com/supervisely-ecosystem/auto-track/assets/61844772/ee1158d7-d9f4-4761-b514-c3f25fc6c8e5"/>
 
 
 ### 2.1: You can also deploy model from the app UI. Click on the `Deploy new model` button, in the appeared modal window select the model, agent and extra parameters if needed. After that click on the `Deploy model` button. The task will be started and selected for the tracking.
 
-<img src="https://private-user-images.githubusercontent.com/61844772/346251241-31312e90-ae88-45fd-b86c-48c6e0b78e15.png"/>
+<img src="https://github.com/supervisely-ecosystem/auto-track/assets/61844772/31312e90-ae88-45fd-b86c-48c6e0b78e15"/>
 
 
 ### 3: Select Auto-Track appliction in the Video Annotation Tool
 
-<img src="https://private-user-images.githubusercontent.com/61844772/346250537-09849a43-5d4b-42d4-8b94-f527c41cebea.png"/>
+<img src="https://github.com/supervisely-ecosystem/auto-track/assets/61844772/09849a43-5d4b-42d4-8b94-f527c41cebea"/>
 
 ## Key features
 
@@ -45,6 +45,6 @@ To track masks, annotated with `Smart Tool` you will need to select a model for 
 3. If an object is occluded for single frame, you can delete it on that frame. To do it you need to select it on the frame, click the right mouse button and select `Delete object`. The app will stop tracking the object on this frame.
 4. If an object has left the scene, you can delete it permanently. To do it you need to select it on the frame, click the right mouse button and select `Delete all from current`. The app will stop tracking the object until the end of the video.
 
-<img src="https://private-user-images.githubusercontent.com/61844772/346251896-bb29ee0f-27c3-4fe3-84d8-0cb5c116bed3.png"/>
+<img src="https://github.com/supervisely-ecosystem/auto-track/assets/61844772/bb29ee0f-27c3-4fe3-84d8-0cb5c116bed3"/>
 
 5. You can use Auto-Track app as a `Smart Tool` if you have selected a model for the `Smart Tool` geometry. Tracking objects, annotated with `Smart Tool` requires a model for the following geometries: `Bounding Box`, `Point` and `Smart Tool`.
