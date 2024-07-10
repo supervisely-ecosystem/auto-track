@@ -1571,7 +1571,6 @@ def track(
         api.logger.warn("Session id is not provided. Some features may not work correctly.")
     track_id = context["trackId"]
     video_id = context["videoId"]
-    figure_ids = list(context["figureIds"])
     object_ids = list(context["objectIds"])
     frame_index = context["frameIndex"]
     frames_count = context["frames"]
