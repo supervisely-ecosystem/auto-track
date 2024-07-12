@@ -1167,9 +1167,12 @@ class Track:
         Returns dictionary with predictions and figure ids by geometry type."""
 
         geom_types = list(figures_by_type.keys())
+
         with ThreadPoolExecutor(len(geom_types)) as executor:
             tasks_by_geom_type = {}
             for geom_type in geom_types:
+                if geom_type == "smarttool":
+                    continue
                 if self.nn_settings.get(geom_type) is None:
                     self.logger.warning("No settings for geometry type %s", geom_type)
                     continue
@@ -1190,6 +1193,13 @@ class Track:
             results_by_geom_type = {
                 geom_type: task.result() for geom_type, task in tasks_by_geom_type.items()
             }
+        if "smarttool" in geom_types:
+            results_by_geom_type["smarttool"] = self.run_geometry(
+                geometry_type="smarttool",
+                figures=figures_by_type["smarttool"],
+                frame_index=frame_index,
+                frames_count=frames_count,
+            )
         return results_by_geom_type
 
     def _get_batch(
