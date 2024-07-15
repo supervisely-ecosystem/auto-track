@@ -1460,6 +1460,9 @@ class Track:
             if frame_from >= frame_to:
                 self.logger.debug("No frames to track", extra={"frame_index": frame_from})
                 continue
+            if len(figures_by_type) == 0:
+                self.logger.info("No geometries to track. Check that geometries are set.")
+                continue
 
             self.logger.debug(
                 "Start iteration",
