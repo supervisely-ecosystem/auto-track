@@ -15,6 +15,17 @@ import src.globals as g
 import src.utils as utils
 
 
+def validate_nn_settings_for_geometry(nn_settings: Dict, geometry_name: str):
+    if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
+        validate_nn_settings_for_geometry(nn_settings, g.GEOMETRY_NAME.RECTANGLE)
+        validate_nn_settings_for_geometry(nn_settings, g.GEOMETRY_NAME.POINT)
+        return
+    if geometry_name not in nn_settings:
+        raise ValueError(f"NN settings for {geometry_name} are not specified")
+    if "task_id" in nn_settings[geometry_name] and nn_settings.get("task_id", None) is None:
+        raise ValueError(f"NN settings for {geometry_name} are not specified")
+
+
 def _fix_unbound(rect: utils.Prediction, point: utils.Prediction):
     rect_geom = sly.Rectangle.from_json(rect.geometry_data)
     point_geom = sly.Point.from_json(point.geometry_data)
@@ -65,7 +76,7 @@ def get_figure_geometry_name(figure: FigureInfo):
         return figure.geometry_type
     if figure.meta.get("smartToolInput", None) is None:
         return figure.geometry_type
-    return "smarttool"
+    return g.GEOMETRY_NAME.SMARTTOOL
 
 
 def _smart_segmentation_with_app(
@@ -275,9 +286,9 @@ def predict_smarttool(
     frames_count: int = None,
 ) -> List[List[utils.Prediction]]:
     """Predict smarttool geometries using the specified NN model settings."""
-    rect_settings = nn_settings[sly.Rectangle.geometry_name()]
-    point_settings = nn_settings[sly.Point.geometry_name()]
-    smarttool_settings = nn_settings["smarttool"]
+    rect_settings = nn_settings[g.GEOMETRY_NAME.RECTANGLE]
+    point_settings = nn_settings[g.GEOMETRY_NAME.POINT]
+    smarttool_settings = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]
 
     # prepare bboxes and points for figures
     figure_crops = []
@@ -340,7 +351,7 @@ def predict_smarttool(
                     for positives in figure_positives
                     for point in positives
                 ],
-                geometry_type=sly.Point.geometry_name(),
+                geometry_type=g.GEOMETRY_NAME.POINT,
             )
         else:
             task_id = point_settings["task_id"]
@@ -354,7 +365,7 @@ def predict_smarttool(
                     for positives in figure_positives
                     for point in positives
                 ],
-                geometry_type=sly.Point.geometry_name(),
+                geometry_type=g.GEOMETRY_NAME.POINT,
                 frame_index=frame_index,
                 frames_count=frames_count,
             )
@@ -374,7 +385,7 @@ def predict_smarttool(
                 [
                     utils.Prediction(
                         geometry_data=point.to_json(),
-                        geometry_type=sly.Point.geometry_name(),
+                        geometry_type=g.GEOMETRY_NAME.POINT,
                     )
                     for point in points
                 ]
@@ -1103,9 +1114,8 @@ class Track:
     ) -> List[List[FigureInfo]]:
         """Run tracking for the specified geometry type."""
         sly.logger.debug("Tracking geometry type %s", geometry_type)
-        if geometry_type not in self.nn_settings:
-            raise KeyError(f"No neural network settings for geometry type {geometry_type}")
-        if geometry_type == "smarttool":
+        validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
+        if geometry_type == g.GEOMETRY_NAME.SMARTTOOL:
             predictions = predict_smarttool(
                 api=self.api,
                 video_id=self.video_id,
@@ -1171,15 +1181,11 @@ class Track:
         with ThreadPoolExecutor(len(geom_types)) as executor:
             tasks_by_geom_type = {}
             for geom_type in geom_types:
-                if geom_type == "smarttool":
+                if geom_type == g.GEOMETRY_NAME.SMARTTOOL:
                     continue
-                if self.nn_settings.get(geom_type) is None:
-                    self.logger.warning("No settings for geometry type %s", geom_type)
-                    continue
-                if (
-                    "task_id" in self.nn_settings[geom_type]
-                    and self.nn_settings[geom_type]["task_id"] is None
-                ):
+                try:
+                    validate_nn_settings_for_geometry(self.nn_settings, geom_type)
+                except ValueError:
                     self.logger.warning("No settings for geometry type %s", geom_type)
                     continue
                 task = executor.submit(
@@ -1193,10 +1199,14 @@ class Track:
             results_by_geom_type = {
                 geom_type: task.result() for geom_type, task in tasks_by_geom_type.items()
             }
-        if "smarttool" in geom_types:
-            results_by_geom_type["smarttool"] = self.run_geometry(
-                geometry_type="smarttool",
-                figures=figures_by_type["smarttool"],
+        if g.GEOMETRY_NAME.SMARTTOOL in geom_types:
+            try:
+                validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.SMARTTOOL)
+            except ValueError:
+                self.logger.warning("No settings for geometry type smarttool")
+            results_by_geom_type[g.GEOMETRY_NAME.SMARTTOOL] = self.run_geometry(
+                geometry_type=g.GEOMETRY_NAME.SMARTTOOL,
+                figures=figures_by_type[g.GEOMETRY_NAME.SMARTTOOL],
                 frame_index=frame_index,
                 frames_count=frames_count,
             )
@@ -1438,13 +1448,9 @@ class Track:
             for timeline_index, (_, timeline_figures) in enumerate(timelines_data):
                 for timeline_figure in timeline_figures:
                     geom_name = get_figure_geometry_name(timeline_figure)
-                    if geom_name not in self.nn_settings:
-                        self.logger.warning("No settings for geometry type %s", geom_name)
-                        continue
-                    if (
-                        "task_id" in self.nn_settings[geom_name]
-                        and self.nn_settings[geom_name].get("task_id") is None
-                    ):
+                    try:
+                        validate_nn_settings_for_geometry(self.nn_settings, geom_name)
+                    except ValueError:
                         self.logger.warning("No settings for geometry type %s", geom_name)
                         continue
                     figures_by_type.setdefault(geom_name, []).append(timeline_figure)

@@ -42,9 +42,9 @@ def cache_video(api: sly.Api, state: Dict, nn_settings: dict):
         geometries = set(g.geometry_nn.keys())
     geometries = set(geometries)
     if sly.Bitmap.geometry_name() in geometries:
-        geometries.add("smarttool")
-    if "smarttool" in geometries:
-        geometries.update([sly.Point.geometry_name(), sly.Rectangle.geometry_name()])
+        geometries.add(g.GEOMETRY_NAME.SMARTTOOL)
+    if g.GEOMETRY_NAME.SMARTTOOL in geometries:
+        geometries.update([g.GEOMETRY_NAME.POINT, g.GEOMETRY_NAME.RECTANGLE])
 
     sly.logger.debug(
         "Start caching video for this geometries",

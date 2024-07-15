@@ -135,7 +135,7 @@ def split_figures_by_type(figures: List[FigureInfo]) -> Dict[str, List[FigureInf
     for figure in figures:
         smarttool_input = get_smarttool_input(figure.meta)
         if smarttool_input is not None and smarttool_input.visible:
-            result.setdefault("smarttool", []).append(figure)
+            result.setdefault(g.GEOMETRY_NAME.SMARTTOOL, []).append(figure)
             continue
         result.setdefault(figure.geometry_type, []).append(figure)
     return result

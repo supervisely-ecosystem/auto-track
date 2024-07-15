@@ -7,23 +7,23 @@ from .classes import DeployAppParameters, DeployAppByGeometry, GeometryCard
 
 GEOMETRIES = (
     (
-        sly.Rectangle.geometry_name(),
+        g.GEOMETRY_NAME.RECTANGLE,
         {
             "title": "Bounding Box",
             "description": "Select NN model for Bounding box figures",
-            "geometries": [sly.Rectangle.geometry_name()],
+            "geometries": [g.GEOMETRY_NAME.RECTANGLE],
         },
     ),
     (
-        sly.Point.geometry_name(),
+        g.GEOMETRY_NAME.POINT,
         {
             "title": "Point based geometries",
             "description": "Select NN model for Point, Polyline, Ploygon and Keypoints figures",
             "geometries": [
-                sly.Point.geometry_name(),
-                sly.Polyline.geometry_name(),
-                sly.Polygon.geometry_name(),
-                sly.GraphNodes.geometry_name(),
+                g.GEOMETRY_NAME.POINT,
+                g.GEOMETRY_NAME.POLYLINE,
+                g.GEOMETRY_NAME.POLYGON,
+                g.GEOMETRY_NAME.GRAPH_NODES,
             ],
         },
     ),
@@ -36,14 +36,14 @@ GEOMETRIES = (
         },
     ),
     (
-        "smarttool",
+        g.GEOMETRY_NAME.SMARTTOOL,
         {
             "title": "Smart Tool",
             "description": (
                 "Select NN model for SmartTool. When tracking Box and points for smarttool "
                 "annotation will be predicted using NN models selected in the previous steps."
             ),
-            "geometries": ["smarttool"],
+            "geometries": [g.GEOMETRY_NAME.SMARTTOOL],
         },
     ),
 )

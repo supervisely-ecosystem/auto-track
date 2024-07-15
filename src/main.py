@@ -50,8 +50,8 @@ def start_cache_video(request: Request, task: BackgroundTasks):
 def smart_segmentation(request: Request):
     sly.logger.debug("recieved call to /smart_segmentation")
     nn_settings = get_nn_settings()
-    if "url" in nn_settings["smarttool"]:
-        url = nn_settings["smarttool"]["url"]
+    if "url" in nn_settings[g.GEOMETRY_NAME.SMARTTOOL]:
+        url = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]["url"]
         state = request.state.state
         context = request.state.context
         data = {
@@ -63,7 +63,7 @@ def smart_segmentation(request: Request):
         r = requests.post(f"{url}/smart_segmentation", json=data, timeout=60)
         return Response(r.content, status_code=r.status_code, media_type=r.headers["Content-Type"])
     else:
-        task_id = nn_settings["smarttool"]["task_id"]
+        task_id = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]["task_id"]
         state = request.state.state
         context = request.state.context
         return g.api.app.send_request(

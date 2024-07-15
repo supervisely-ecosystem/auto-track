@@ -36,7 +36,19 @@ class ENV:
 
     @classmethod
     def is_cloud(cls) -> bool:
-        sly.env.sly_cloud_server_address(raise_not_found=False) is not None
+        if hasattr(sly.env, "sly_cloud_server_address"):
+            sly.env.sly_cloud_server_address(raise_not_found=False) is not None
+        return False
+
+
+class GEOMETRY_NAME:
+    RECTANGLE = sly.Rectangle.geometry_name()
+    POINT = sly.Point.geometry_name()
+    POLYLINE = sly.Polyline.geometry_name()
+    POLYGON = sly.Polygon.geometry_name()
+    BITMAP = sly.Bitmap.geometry_name()
+    GRAPH_NODES = sly.GraphNodes.geometry_name()
+    SMARTTOOL = "smarttool"
 
 
 class AppParameterDescription:
@@ -154,13 +166,13 @@ class NN:
 
 nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG]
 geometry_nn = {
-    sly.Rectangle.geometry_name(): [NN.MIX_FORMER],
-    sly.Point.geometry_name(): [NN.CO_TRACKER],
-    sly.Polyline.geometry_name(): [NN.CO_TRACKER],
-    sly.Polygon.geometry_name(): [NN.CO_TRACKER],
-    sly.GraphNodes.geometry_name(): [NN.CO_TRACKER],
-    sly.Bitmap.geometry_name(): [NN.XMEM],
-    "smarttool": [NN.CLICKSEG],
+    GEOMETRY_NAME.RECTANGLE: [NN.MIX_FORMER],
+    GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
+    GEOMETRY_NAME.POLYLINE: [NN.CO_TRACKER],
+    GEOMETRY_NAME.POLYGON: [NN.CO_TRACKER],
+    GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
+    GEOMETRY_NAME.BITMAP: [NN.XMEM],
+    GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG],
 }
 
 
