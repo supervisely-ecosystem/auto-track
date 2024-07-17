@@ -314,7 +314,7 @@ class GeometryCard:
                 ]
             )
         session_selector.set(items=items)
-        if len(items) == 0:
+        if len(items) == 0 and g.ENV.is_cloud():
             items = nn_selector.get_items()
             changed = False
             for item in items:
