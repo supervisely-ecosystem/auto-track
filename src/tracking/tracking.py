@@ -22,7 +22,10 @@ def validate_nn_settings_for_geometry(nn_settings: Dict, geometry_name: str):
         return
     if geometry_name not in nn_settings:
         raise ValueError(f"NN settings for {geometry_name} are not specified")
-    if "task_id" in nn_settings[geometry_name] and nn_settings.get("task_id", None) is None:
+    if (
+        "task_id" in nn_settings[geometry_name]
+        and nn_settings[geometry_name].get("task_id", None) is None
+    ):
         raise ValueError(f"NN settings for {geometry_name} are not specified")
 
 
