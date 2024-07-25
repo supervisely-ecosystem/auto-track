@@ -1,4 +1,5 @@
 import os
+import threading
 from typing import Dict, List, Literal, Tuple
 
 from dotenv import load_dotenv
@@ -15,6 +16,10 @@ api.retry_count = 2
 
 team_id = sly.env.team_id()
 workspace_id = sly.env.workspace_id()
+
+tracks_lock = threading.Lock()
+
+NO_OBJECT_TAGS = ["no-objects"]
 
 
 class ENV:

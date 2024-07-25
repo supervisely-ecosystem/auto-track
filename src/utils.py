@@ -1,5 +1,5 @@
+import functools
 from typing import Dict, List
-from concurrent.futures import ThreadPoolExecutor
 
 import uuid
 import cv2
@@ -7,6 +7,9 @@ import numpy as np
 
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
+from supervisely import TinyTimer
+
+import src.globals as g
 
 
 def get_figure_track_id(figure_id: int) -> str:
@@ -167,3 +170,37 @@ def figure_from_prediction(
         area=None,
         track_id=track_id,
     )
+
+
+def time_it(func, *args, **kwargs):
+    """Measure time of function execution and return result and time in seconds."""
+    tm = TinyTimer()
+    result = func(*args, **kwargs)
+    return tm.get_sec(), result
+
+
+def send_error_data(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        value = None
+        try:
+            value = func(*args, **kwargs)
+        except Exception as exc:
+            api: sly.Api = args[0]
+            context = args[1]
+            track_id = context.get("trackId", None)
+            api.logger.error("An error occured:", exc_info=True)
+
+            api.post(
+                "videos.notify-annotation-tool",
+                data={
+                    "type": "videos:tracking-error",
+                    "data": {
+                        "trackId": str(track_id),
+                        "error": {"message": str(exc)},
+                    },
+                },
+            )
+        return value
+
+    return wrapper

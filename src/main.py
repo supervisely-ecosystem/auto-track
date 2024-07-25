@@ -5,6 +5,7 @@ from fastapi import BackgroundTasks, Request, Response
 import src.globals as g
 from src.ui import layout, get_nn_settings, update_all_nn
 from src.tracking import track, cache_video
+from src.tracking.track import Update
 
 app = sly.Application(layout=layout)
 
@@ -13,6 +14,7 @@ server = app.get_server()
 
 @server.post("/track")
 def start_track(request: Request, task: BackgroundTasks):
+    """Start a new track or add new objects to the existing track."""
     sly.logger.debug("recieved call to /track")
     nn_settings = get_nn_settings()
     api = request.state.api
@@ -73,6 +75,9 @@ def smart_segmentation(request: Request):
 
 @server.post("/continue_track")
 def continue_track(request: Request, task: BackgroundTasks):
+    """
+    Continue existing track
+    """
     sly.logger.debug("recieved call to /continue_track")
     nn_settings = get_nn_settings()
     api = request.state.api
@@ -86,7 +91,7 @@ def continue_track(request: Request, task: BackgroundTasks):
         api,
         context,
         nn_settings,
-        "continue",
+        Update.Type.CONTINUE,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
     )
@@ -95,6 +100,7 @@ def continue_track(request: Request, task: BackgroundTasks):
 
 @server.post("/objects_removed")
 def objects_removed(request: Request, task: BackgroundTasks):
+    """Objects removed from tracking on specific frames"""
     sly.logger.debug("recieved call to /objects_removed")
     nn_settings = get_nn_settings()
     api = request.state.api
@@ -108,11 +114,69 @@ def objects_removed(request: Request, task: BackgroundTasks):
         api,
         context,
         nn_settings,
-        "delete",
+        Update.Type.DELETE,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
     )
     return {"message": "Objects removed."}
+
+
+@server.post("/tag_removed")
+def tag_removed(request: Request, task: BackgroundTasks):
+    """Remove no-objects tag"""
+    sly.logger.debug("recieved call to /tag_removed", extra={"context": request.state.context})
+    nn_settings = get_nn_settings()
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    cloud_token = request.headers.get("x-sly-cloud-token", None)
+    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    task.add_task(
+        track,
+        api,
+        context,
+        nn_settings,
+        Update.Type.REMOVE_TAG,
+        cloud_token=cloud_token,
+        cloud_action_id=cloud_action_id,
+    )
+
+
+@server.post("/manual_objects_removed")
+def manual_objects_removed(request: Request, task: BackgroundTasks):
+    """Figure annotated by user was deleted"""
+    sly.logger.debug(
+        "recieved call to /manual_objects_removed", extra={"context": request.state.context}
+    )
+    nn_settings = get_nn_settings()
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    cloud_token = request.headers.get("x-sly-cloud-token", None)
+    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    task.add_task(
+        track,
+        api,
+        context,
+        nn_settings,
+        Update.Type.MANUAL_OBJECTS_REMOVED,
+        cloud_token=cloud_token,
+        cloud_action_id=cloud_action_id,
+    )
+
+
+@server.post("/stop_tracking")
+def stop_tracking(request: Request, task: BackgroundTasks):
+    """Stop tracking"""
+    sly.logger.debug("recieved call to /stop_tracking", extra={"context": request.state.context})
+    context = request.state.context
+    track_id = context["trackId"]
+    cur_track = g.current_tracks.get(track_id, None)
+    if cur_track is None:
+        return
+    cur_track.stop()
 
 
 update_all_nn()
