@@ -184,34 +184,6 @@ class Timeline:
                     no_object_frames.add(i)
         self.no_object_frames = no_object_frames
 
-    # def update_figures(self, figures: List[FigureInfo] = None):
-    #     if figures is None:
-    #         figures = self.track.api.video.figure.get_list(
-    #             dataset_id=self.track.dataset_id,
-    #             filters=[
-    #                 {"field": "objectId", "operator": "=", "value": self.object_id},
-    #                 {"field": "startFrame", "operator": ">=", "value": self.start_frame},
-    #                 {"field": "endFrame", "operator": "<=", "value": self.end_frame},
-    #             ],
-    #         )
-    #     self.figures = figures
-
-    # def append_figures(self, figures: List[FigureInfo] = None, frame_range: Tuple[int, int] = None):
-    #     if figures is not None:
-    #         self.figures.extend(figures)
-    #         return
-    #     if frame_range is None:
-    #         raise ValueError("Either figures or frame_range should be provided")
-    #     new_figures = self.track.api.video.figure.get_list(
-    #         dataset_id=self.track.dataset_id,
-    #         filters=[
-    #             {"field": "objectId", "operator": "=", "value": self.object_id},
-    #             {"field": "startFrame", "operator": ">=", "value": frame_range[0]},
-    #             {"field": "endFrame", "operator": "<=", "value": frame_range[1]},
-    #         ],
-    #     )
-    #     self.figures.extend(new_figures)
-
     def get_batch(self, batch_size: int) -> Tuple[int, int, List[FigureInfo]]:
         """
         Get batch of frames to track
@@ -246,7 +218,7 @@ class Timeline:
                 new_tracklet_end_frame = self._find_end_frame(frame_index, frames_count)
                 new_tracklet = Tracklet(self, frame_index, new_tracklet_end_frame, frame_figures)
                 self.tracklets.insert(i + 1, new_tracklet)
-                tracklet.cut(frame_index + 1, remove_added_figures=True)
+                tracklet.cut(frame_index, remove_added_figures=True)
                 return
         # no intersections - insert new tracklet
         new_tracklet_end_frame = self._find_end_frame(frame_index, frames_count)
@@ -298,9 +270,22 @@ class Timeline:
         self.update_object_info()
         self.update_no_object_frames()
 
+        frame_figures = None
+
         for tracklet in self.tracklets:
             if frame_index == tracklet.end_frame + 1:
                 tracklet.continue_tracklet(frame_range[1])
+                if tracklet.last_tracked[0] >= frame_index:
+                    if frame_figures is None:
+                        frame_figures = self.track.api.video.figure.get_list(
+                            dataset_id=self.track.dataset_id,
+                            filters=[
+                                {"field": "objectId", "operator": "=", "value": self.object_id},
+                                {"field": "startFrame", "operator": ">=", "value": frame_index},
+                                {"field": "endFrame", "operator": "<=", "value": frame_index},
+                            ],
+                        )
+                    tracklet.last_tracked = (frame_index, frame_figures)
 
     def manual_figure_removed(self, frame_index: int, end_frame_for_current_range: int):
         frame_figures = self.track.api.video.figure.get_list(
@@ -322,12 +307,18 @@ class Timeline:
                 if len(self.key_figures.get(frame_index, [])) == 0:
                     tracklets_to_remove.append(frame_index)
                 else:
+                    self.track.prevent_object_upload(
+                        self.object_id, (frame_index, (frame_index, tracklet.end_frame))
+                    )
                     tracklet.update(frame_index, self.key_figures.get(frame_index, []))
                     tracklet.clear(from_frame=frame_index + 1)
             elif tracklet.end_frame + 1 == frame_index:
                 tracklet.continue_tracklet(end_frame_for_current_range)
 
         for i in tracklets_to_remove:
+            self.track.prevent_object_upload(
+                self.object_id, (frame_index, self.tracklets[i].end_frame)
+            )
             self.remove_tracklet(i, clear=True)
 
     def remove_tracklet(self, frame_index: int, clear=False):
@@ -471,11 +462,14 @@ class Track:
             "object_ids": self.object_ids,
         }
 
-        self.batch_size = 8
+        self.batch_size = 16
         self.updates: List[Update] = []
+        self.updates_pending = False
+        self._lock = threading.Lock()
         self._lock = threading.Lock()
         self._upload_queue = queue.Queue()
         self._upload_thread = None
+        self.prevent_upload_objects = []
 
         self.no_object_tag_ids = [
             t.id
@@ -622,6 +616,7 @@ class Track:
     # Updates
     def append_update(self, update: Update):
         """append update"""
+        self.updates_pending = True
         with self._lock:
             self.updates.append(update)
 
@@ -671,7 +666,7 @@ class Track:
         """wait for updates"""
         self.logger.debug("Waiting %s seconds for updates", timeout, extra={**self.logger_extra})
         for i in range(timeout):
-            if len(self.updates) > 0:
+            if self.updates_pending:
                 self.logger.debug(
                     "Received updates after tracking finished", extra={**self.logger_extra}
                 )
@@ -972,14 +967,37 @@ class Track:
 
         return [key_id_map.get_figure_id(figure_key) for figure_key in figures_keys]
 
+    def _filter_figures_to_upload(
+        self, figures: List[FigureInfo], timestamp: float
+    ) -> List[FigureInfo]:
+        filtered = []
+
+        def __prevent_upload_check(figure):
+            for object_id, frame_range, obj_deleted_at in self.prevent_upload_objects:
+                if (
+                    figure.object_id == object_id
+                    and obj_deleted_at > timestamp
+                    and frame_range[0] <= figure.frame_index <= frame_range[1]
+                ):
+                    return False
+            return True
+
+        filtered = [figure for figure in figures if __prevent_upload_check(figure)]
+
+        return filtered
+
     def _upload_iteration(
         self,
         predictions: List[List[List[FigureInfo]]],
         frame_range: Tuple[int, int],
         transaction_id: str,
     ):
+        timestamp = time.time()
         figures = self._get_figures_from_predictions(predictions)
+        figures = self._filter_figures_to_upload(figures, timestamp)
         object_ids = list(set([fig.object_id for fig in figures]))
+        if len(object_ids) == 0:
+            return
 
         figures_to_delete: List[FigureInfo] = self.api.video.figure.get_list(
             dataset_id=self.dataset_id,
@@ -994,10 +1012,8 @@ class Track:
             threading.Thread(target=self._remove_figures, args=(figures_to_delete,)).start()
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
-        uploaded_figures = len(uploaded_figures)
-        # self.progress.update(uploaded_figures)
 
-        self.withdraw_billing(transaction_id, items_count=uploaded_figures)
+        self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
 
     def _upload_loop(self):
         while not self._upload_queue.empty():
@@ -1015,7 +1031,6 @@ class Track:
         if self._upload_thread is None or not self._upload_thread.is_alive():
             self._upload_thread = threading.Thread(target=self._upload_loop)
             self._upload_thread.start()
-        self._upload_thread.join()
 
     # RUN main loop
     def run(self):
@@ -1029,19 +1044,22 @@ class Track:
 
             total_tm = TinyTimer()
 
-            # Apply updates
-            apply_updates_time, _ = utils.time_it(self.apply_updates)
+            self.apply_updates()
 
-            # Get batch data
-            get_batch_time, (frame_from, frame_to, timelines_figures, timelines_indexes) = (
-                utils.time_it(self.get_batch)
-            )
+            wait_update_time = TinyTimer()
+            with self._lock:
+                # Get batch data
+                self.updates_pending = False
+                get_batch_time, (frame_from, frame_to, timelines_figures, timelines_indexes) = (
+                    utils.time_it(self.get_batch)
+                )
+            wait_update_time = wait_update_time.get_sec() - get_batch_time
 
             if frame_from is None:
-                if self.wait_for_updates():
-                    continue
                 if self._upload_thread is not None and self._upload_thread.is_alive():
                     self._upload_thread.join()
+                if self.wait_for_updates():
+                    continue
                 return
 
             self.logger.debug(
@@ -1092,7 +1110,7 @@ class Track:
                 "Iteration time",
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
-                    "get and apply updates": f"{apply_updates_time:.6f} sec",
+                    "wait update": f"{wait_update_time:.6f} sec",
                     "get batch data": f"{get_batch_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
@@ -1114,6 +1132,8 @@ class Track:
         self.frame_ranges = merged_ranges
 
     def object_changed(self, object_ids: List[int], frame_index: int, frames_count: int):
+        for obj_id in object_ids:
+            self.prevent_object_upload(obj_id, (frame_index, self.video_info.frames_count))
         self.object_ids = list(set(self.object_ids + object_ids))
         frames_count = min(self.video_info.frames_count - frame_index, frames_count)
         self.frame_ranges.append((frame_index, frame_index + frames_count))
@@ -1139,7 +1159,12 @@ class Track:
         Update track if it was extended
         Should extends timelines and download new figures
         """
+
         frames_count = min(self.video_info.frames_count - frame_index, frames_count)
+        for frame_range in self.frame_ranges:
+            if frame_range[0] <= frame_index <= frame_range[1]:
+                if frame_index + frames_count <= frame_range[1]:
+                    return
         self.frame_ranges.append((frame_index, frame_index + frames_count))
         self.merge_frame_ranges()
         for timeline in self.timelines:
@@ -1151,6 +1176,7 @@ class Track:
         It means that objects should not be tracked on the frames where they were removed
         Should update timelines and remove added figures
         """
+        self.prevent_object_upload(object_id, (frame_index, self.video_info.frames_count))
         for timeline in self.timelines:
             if timeline.object_id == object_id:
                 timeline.object_removed(frame_index, frames_count)
@@ -1183,6 +1209,9 @@ class Track:
             if timeline.object_id == object_id:
                 timeline.manual_figure_removed(frame_index, frame_range[1])
 
+    def prevent_object_upload(self, object_id: int, frame_range: Tuple[int, int]):
+        self.prevent_upload_objects.append((object_id, frame_range, time.time()))
+
     def stop(self):
         self.global_stop_indicator = True
 
@@ -1208,11 +1237,16 @@ def track(
         for object_id, frame_range in delete_data:
             frame_index = frame_range[0]
             frames_count = frame_range[1] - frame_range[0] + 1
-            for cur_track in g.current_tracks.values():
+            tracks_to_update = set()
+            for track_id, cur_track in g.current_tracks.items():
                 if object_id in cur_track.object_ids:
                     cur_track.append_update(
                         Update([object_id], frame_range[0], frames_count, update_type)
                     )
+                    tracks_to_update.add(track_id)
+            for track_id in tracks_to_update:
+                cur_track = g.current_tracks[track_id]
+                threading.Thread(target=cur_track.apply_updates).start()
         return
 
     if update_type == Update.Type.CONTINUE:
@@ -1231,15 +1265,18 @@ def track(
                     update_type,
                 )
             )
+            cur_track.apply_updates()
             return
         else:
             api.logger.info("Track not found. Starting new one", extra={"track_id": track_id})
 
     if update_type == Update.Type.REMOVE_TAG:
-        video_id = context["tag"]["imageId"]
-        object_id = context["tag"]["objectId"]
-        frame_range = context["tag"]["frameRange"]
-        tag_id = context["tag"]["tagId"]  # NOT USED
+        tag = context["tag"]
+        video_id = tag.get("imageId", tag.get("videoId", None))
+        object_id = tag["objectId"]
+        frame_range = tag["frameRange"]
+        tag_id = tag["tagId"]  # NOT USED
+        tracks_to_update = set()
         for cur_track in g.current_tracks.values():
             if cur_track.video_id == video_id:
                 cur_track.append_update(
@@ -1251,11 +1288,16 @@ def track(
                         tag_id=tag_id,  # NOT USED
                     )
                 )
+                tracks_to_update.add(cur_track.track_id)
+        for track_id in tracks_to_update:
+            cur_track = g.current_tracks[track_id]
+            threading.Thread(target=cur_track.apply_updates).start()
         return
 
     if update_type == Update.Type.MANUAL_OBJECTS_REMOVED:
         figures = context["figures"]
         video_id = context["videoId"]
+        tracks_to_update = set()
         for cur_track in g.current_tracks.values():
             if cur_track.video_id == video_id:
                 for figure in figures:
@@ -1267,6 +1309,10 @@ def track(
                             update_type,
                         )
                     )
+                tracks_to_update.add(cur_track.track_id)
+        for track_id in tracks_to_update:
+            cur_track = g.current_tracks[track_id]
+            threading.Thread(target=cur_track.apply_updates).start()
         return
 
     # track
