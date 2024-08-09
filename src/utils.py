@@ -1,10 +1,11 @@
 import functools
-from typing import Dict, List
+from typing import Dict, List, Tuple, Type
 
 import uuid
 import cv2
 import numpy as np
 
+import requests
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely import TinyTimer
@@ -177,6 +178,22 @@ def time_it(func, *args, **kwargs):
     tm = TinyTimer()
     result = func(*args, **kwargs)
     return tm.get_sec(), result
+
+
+def parse_exception(exc: Exception, extra: Dict = None) -> Tuple[Type, str]:
+    if isinstance(exc, requests.exceptions.HTTPError):
+        try:
+            exc_repsponse = exc.response.json()
+            if "details" in exc_repsponse and "message" in exc_repsponse["details"]:
+                msg = exc_repsponse["details"]["message"]
+                if extra is not None:
+                    msg = msg.rstrip(".")
+                    msg += ". " + ", ".join(f"{k}: {v}" for k, v in extra.items())
+                return exc.__class__, msg
+            return exc.__class__, str(exc_repsponse)
+        except Exception:
+            return str(exc)
+    return exc.__class__, str(exc)
 
 
 def send_error_data(func):

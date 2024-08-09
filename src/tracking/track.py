@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 
+import requests
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely.api.module_api import ApiField
@@ -734,39 +735,42 @@ class Track:
         validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
 
         frames_count = frame_to - frame_from
-        if geometry_type == "smarttool":
-            predictions = inference.predict_smarttool(
-                api=self.api,
-                video_id=self.video_id,
-                track_id=self.track_id,
-                nn_settings=self.nn_settings,
-                figure_metas=[figure.meta for figure in figures],
-                frame_index=frame_from,
-                frames_count=frames_count,
-            )
-        elif "url" in self.nn_settings[geometry_type]:
-            url = self.nn_settings[geometry_type]["url"]
-            predictions = inference.predict_by_url(
-                api=self.api,
-                video_id=self.video_id,
-                frame_index=frame_from,
-                frames_count=frames_count,
-                nn_url=url,
-                geometries_data=[figure.geometry for figure in figures],
-                geometry_type=geometry_type,
-            )
-        else:
-            task_id = self.nn_settings[geometry_type]["task_id"]
-            predictions = inference.predict_with_app(
-                api=self.api,
-                video_id=self.video_id,
-                task_id=task_id,
-                geometries_data=[figure.geometry for figure in figures],
-                geometry_type=geometry_type,
-                frame_index=frame_from,
-                frames_count=frames_count,
-            )
-
+        try:
+            if geometry_type == "smarttool":
+                predictions = inference.predict_smarttool(
+                    api=self.api,
+                    video_id=self.video_id,
+                    track_id=self.track_id,
+                    nn_settings=self.nn_settings,
+                    figure_metas=[figure.meta for figure in figures],
+                    frame_index=frame_from,
+                    frames_count=frames_count,
+                )
+            elif "url" in self.nn_settings[geometry_type]:
+                url = self.nn_settings[geometry_type]["url"]
+                predictions = inference.predict_by_url(
+                    api=self.api,
+                    video_id=self.video_id,
+                    frame_index=frame_from,
+                    frames_count=frames_count,
+                    nn_url=url,
+                    geometries_data=[figure.geometry for figure in figures],
+                    geometry_type=geometry_type,
+                )
+            else:
+                task_id = self.nn_settings[geometry_type]["task_id"]
+                predictions = inference.predict_with_app(
+                    api=self.api,
+                    video_id=self.video_id,
+                    task_id=task_id,
+                    geometries_data=[figure.geometry for figure in figures],
+                    geometry_type=geometry_type,
+                    frame_index=frame_from,
+                    frames_count=frames_count,
+                )
+        except Exception as e:
+            cls, exc_str = utils.parse_exception(e, {"geometry": geometry_type, "frames": [frame_from, frame_to]})
+            raise cls(exc_str) from None
         result = []
         for i, frame_predictions in enumerate(predictions):
             result.append([])
