@@ -769,7 +769,9 @@ class Track:
                     frames_count=frames_count,
                 )
         except Exception as e:
-            cls, exc_str = utils.parse_exception(e, {"geometry": geometry_type, "frames": [frame_from, frame_to]})
+            cls, exc_str = utils.parse_exception(
+                e, {"geometry": geometry_type, "frames": [frame_from, frame_to]}
+            )
             raise cls(exc_str) from None
         result = []
         for i, frame_predictions in enumerate(predictions):
@@ -1135,6 +1137,12 @@ class Track:
                 )
         self.frame_ranges = merged_ranges
 
+    def get_frame_range(self, frame_index):
+        for frame_range in self.frame_ranges:
+            if frame_range[0] <= frame_index <= frame_range[1]:
+                return frame_range
+        return None
+
     def object_changed(self, object_ids: List[int], frame_index: int, frames_count: int):
         for obj_id in object_ids:
             self.prevent_object_upload(obj_id, (frame_index, self.video_info.frames_count))
@@ -1142,19 +1150,20 @@ class Track:
         frames_count = min(self.video_info.frames_count - frame_index, frames_count)
         self.frame_ranges.append((frame_index, frame_index + frames_count))
         self.merge_frame_ranges()
+        frame_range = self.get_frame_range(frame_index)
 
         obj_id_to_timeline = {tl.object_id: tl for tl in self.timelines}
         for object_id in object_ids:
             if object_id in obj_id_to_timeline:
                 timeline = obj_id_to_timeline[object_id]
-                timeline.object_changed(frame_index, frames_count)
+                timeline.object_changed(frame_index, frame_range[1] - frame_index)
             else:
                 self.timelines.append(
                     Timeline(
                         self,
                         object_id,
                         frame_index,
-                        frame_index + frames_count,
+                        frame_range[1],
                     )
                 )
 
@@ -1191,11 +1200,9 @@ class Track:
         It means that objects should be tracked on the frames where they were removed
         Should update timelines and set last tracked figures to one frame before the removal
         """
-        frame_range = self.frame_ranges[0]
-        for fr in self.frame_ranges:
-            if fr[0] <= frame_index <= fr[1]:
-                frame_range = fr
-                break
+        frame_range = self.get_frame_range(frame_index)
+        if frame_range is None:
+            frame_range = self.frame_ranges[0]
         for timeline in self.timelines:
             if timeline.object_id == object_id:
                 timeline.no_object_tag_removed(frame_index=frame_index, frame_range=frame_range)
