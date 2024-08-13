@@ -299,7 +299,7 @@ class Timeline:
         )
         key_frame_figures = find_key_figures(frame_figures)
         self.key_figures.update(key_frame_figures)
-        if len(key_frame_figures.get(frame_index, [])) == 0:
+        if len(key_frame_figures.get(frame_index, None)) == 0:
             del self.key_figures[frame_index]
 
         tracklets_to_remove = []
