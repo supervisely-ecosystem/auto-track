@@ -346,9 +346,10 @@ class Timeline:
         ]
 
     def update(self, frame_from: int, frame_to: int, predictions: List[List[FigureInfo]]):
+        self.track.logger.debug("Update timeline", extra={"timeline": self.log_data(), "frame_from": frame_from, "frame_to": frame_to})
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
-                for frame_index in range(frame_from, frame_to + 1):
+                for frame_index in range(frame_from + 1, frame_to + 1):
                     figures = predictions.pop(0)
                     if len(figures) == 0:  # objects dissapear
                         tracklet.update(frame_index, figures, stop=True)
