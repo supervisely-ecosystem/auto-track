@@ -1,3 +1,4 @@
+import ast
 from typing import List, Dict, Literal, NamedTuple, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor
 from logging import Logger
@@ -56,6 +57,7 @@ class Tracklet:
         self.start_frame = start_frame
         self.end_frame = end_frame
         self.last_tracked = (start_frame, figures)
+        self.area_hist = {}
 
     def continue_tracklet(self, frame_to: int):
         if frame_to <= self.end_frame:
@@ -72,8 +74,20 @@ class Tracklet:
             end_frame = i
         self.end_frame = end_frame
 
-    def update(self, frame_index: int, figures: List[FigureInfo]):
+    def update(self, frame_index: int, figures: List[FigureInfo], stop=False):
+        if stop:
+            self.end_frame = frame_index - 1
+            return
+        if len(figures) == 0:
+            return
+
+        self.area_hist[frame_index] = sum(
+            [utils.maybe_literal_eval(figure.area) for figure in figures]
+        )
         self.last_tracked = (frame_index, figures)
+
+    def median_area(self):
+        return sorted(self.area_hist.values())[len(self.area_hist) // 2]
 
     def cut(self, frame_index: int, remove_added_figures: bool = False):
         if frame_index < self.start_frame:
@@ -331,10 +345,15 @@ class Timeline:
             tracklet for tracklet in self.tracklets if tracklet.start_frame != frame_index
         ]
 
-    def update(self, frame_index: int, figures: List[FigureInfo]):
+    def update(self, frame_from: int, frame_to: int, predictions: List[List[FigureInfo]]):
         for tracklet in self.tracklets:
-            if tracklet.start_frame <= frame_index <= tracklet.end_frame:
-                tracklet.update(frame_index, figures)
+            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
+                for frame_index in range(frame_from, frame_to + 1):
+                    figures = predictions.pop(0)
+                    if len(figures) == 0:  # objects dissapear
+                        tracklet.update(frame_index, figures, stop=True)
+                    else:
+                        tracklet.update(frame_index, figures)
                 return
 
     def get_progress_total(self):
@@ -551,12 +570,15 @@ class Track:
         self.end_frame = 0
 
     def update_timelines(
-        self, frame_to: int, timelines_indexes: List[int], predictions: List[List[List[FigureInfo]]]
+        self,
+        frame_from: int,
+        frame_to: int,
+        timelines_indexes: List[int],
+        predictions: List[List[List[FigureInfo]]],
     ):
         for timeline_index, timeline_predictions in zip(timelines_indexes, predictions):
             timeline = self.timelines[timeline_index]
-            timeline_last_predictions = timeline_predictions[-1]
-            timeline.update(frame_to, timeline_last_predictions)
+            timeline.update(frame_from, frame_to, timeline_predictions)
 
     def refresh_progress(self):
         total = 0
@@ -613,6 +635,25 @@ class Track:
                 **self.logger_extra,
             },
         )
+
+    def is_object_disapeared(self, timeline: Timeline, frame_index: int, figures: List[FigureInfo]):
+        dissapear_threshold = 0.5
+        dissapear_frames = 10
+        for tracklet in timeline.tracklets:
+            if tracklet.start_frame < frame_index <= tracklet.end_frame:
+                this_area = sum([utils.maybe_literal_eval(figure.area) for figure in figures])
+                last_areas = [
+                    tracklet.area_hist[fr_idx]
+                    for fr_idx in sorted(tracklet.area_hist.keys())[-dissapear_frames:]
+                ]
+                if len(last_areas) < dissapear_frames - 1:
+                    return False
+                last_areas.append(this_area)
+                med = tracklet.median_area()
+                if all([area < med * dissapear_threshold for area in last_areas]):
+                    return True
+                return False
+        return False
 
     # Updates
     def append_update(self, update: Update):
@@ -1090,6 +1131,18 @@ class Track:
             )
             batch_predictions: List[List[List[FigureInfo]]]
 
+            # filter to small figures
+            for tl_index, timeline_predictions in enumerate(batch_predictions):
+                timeline = self.timelines[timelines_indexes[tl_index]]
+                removed_object_frame_idxs = set()
+                for fr_index, frame_predictions in enumerate(timeline_predictions):
+                    if self.is_object_disapeared(
+                        timeline, frame_from + fr_index, frame_predictions
+                    ):
+                        removed_object_frame_idxs.add(fr_index)
+                    if fr_index in removed_object_frame_idxs:
+                        frame_predictions.clear()
+
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
                 self.upload_predictions,
@@ -1100,7 +1153,7 @@ class Track:
 
             # Update timelines
             update_timelines_time, _ = utils.time_it(
-                self.update_timelines, frame_to, timelines_indexes, batch_predictions
+                self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
             )
 
             frame_range = self.frame_ranges[0]

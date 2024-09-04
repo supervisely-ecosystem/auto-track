@@ -1,3 +1,4 @@
+import ast
 import functools
 from typing import Dict, List, Tuple, Type
 
@@ -153,6 +154,7 @@ def figure_from_prediction(
     tags: List = None,
     track_id: str = None,
 ) -> FigureInfo:
+    area = sly.deserialize_geometry(prediction.geometry_type, prediction.geometry_data).area
     return FigureInfo(
         id=figure_id,
         class_id=None,
@@ -168,7 +170,7 @@ def figure_from_prediction(
         geometry_meta=None,
         tags=tags,
         meta=prediction.meta.to_json() if prediction.meta is not None else {},
-        area=None,
+        area=area,
         track_id=track_id,
     )
 
@@ -221,3 +223,9 @@ def send_error_data(func):
         return value
 
     return wrapper
+
+
+def maybe_literal_eval(area):
+    if isinstance(area, str):
+        return ast.literal_eval(area)
+    return area
