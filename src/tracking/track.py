@@ -203,7 +203,7 @@ class Timeline:
         self, frame_from, frame_to, predictions: List[List[FigureInfo]]
     ):
         dissapear_threshold = 0.5
-        dissapear_frames = 10
+        dissapear_frames = 3
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 last_areas = [
