@@ -651,6 +651,7 @@ class Track:
                 last_areas.append(this_area)
                 med = tracklet.median_area()
                 if all([area < med * dissapear_threshold for area in last_areas]):
+                    sly.logger.debug("Object disapeared", extra={"timeline": timeline.log_data(), "median": med, "last_areas": last_areas})
                     return True
                 return False
         return False
@@ -1131,7 +1132,7 @@ class Track:
             )
             batch_predictions: List[List[List[FigureInfo]]]
 
-            # filter to small figures
+            # filter disappearing figures
             for tl_index, timeline_predictions in enumerate(batch_predictions):
                 timeline = self.timelines[timelines_indexes[tl_index]]
                 removed_object_frame_idxs = set()
