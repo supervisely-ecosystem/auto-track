@@ -235,6 +235,8 @@ class Timeline:
                             },
                         )
                         return predictions
+                return predictions
+        return predictions
 
     def _find_end_frame(self, start_frame: int, frames_count) -> int:
         end_frame = start_frame
