@@ -173,6 +173,69 @@ class Timeline:
             )
         )
 
+        # dissapear_threshold = 0.5
+        # dissapear_frames = 10
+        # for tracklet in timeline.tracklets:
+        #     if tracklet.start_frame < frame_index <= tracklet.end_frame:
+        #         this_area = sum([utils.maybe_literal_eval(figure.area) for figure in figures])
+        #         last_areas = [
+        #             tracklet.area_hist[fr_idx]
+        #             for fr_idx in sorted(tracklet.area_hist.keys())[-dissapear_frames:]
+        #         ]
+        #         if len(last_areas) < dissapear_frames - 1:
+        #             return False
+        #         last_areas.append(this_area)
+        #         med = tracklet.median_area()
+        #         if all([area < med * dissapear_threshold for area in last_areas]):
+        #             sly.logger.debug(
+        #                 "Object disapeared",
+        #                 extra={
+        #                     "timeline": timeline.log_data(),
+        #                     "median": med,
+        #                     "last_areas": last_areas,
+        #                 },
+        #             )
+        #             return True
+        #         return False
+        # return False
+
+    def filter_for_disapeared_objects(
+        self, frame_from, frame_to, predictions: List[List[FigureInfo]]
+    ):
+        dissapear_threshold = 0.5
+        dissapear_frames = 10
+        for tracklet in self.tracklets:
+            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
+                last_areas = [
+                    tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())
+                ]
+                for frame_i, frame_predictions in enumerate(predictions):
+                    this_area = sum(
+                        [utils.maybe_literal_eval(figure.area) for figure in frame_predictions]
+                    )
+                    last_areas.append(this_area)
+                    med = sorted(last_areas)[len(last_areas) // 2]
+                    if all(
+                        [
+                            area < med * dissapear_threshold
+                            for area in last_areas[-dissapear_frames:]
+                        ]
+                    ):
+                        for i in range(frame_i, len(predictions)):
+                            predictions[i] = []
+                        sly.logger.debug(
+                            "Object disapeared",
+                            extra={
+                                "timeline": self.log_data(),
+                                "median": med,
+                                "last_areas": last_areas[-dissapear_frames:],
+                                "frame_from": frame_from,
+                                "frame_index": frame_from + frame_i,
+                                "frame_to": frame_to,
+                            },
+                        )
+                        return predictions
+
     def _find_end_frame(self, start_frame: int, frames_count) -> int:
         end_frame = start_frame
         for i in range(start_frame + 1, start_frame + frames_count + 1):
@@ -346,7 +409,10 @@ class Timeline:
         ]
 
     def update(self, frame_from: int, frame_to: int, predictions: List[List[FigureInfo]]):
-        self.track.logger.debug("Update timeline", extra={"timeline": self.log_data(), "frame_from": frame_from, "frame_to": frame_to})
+        self.track.logger.debug(
+            "Update timeline",
+            extra={"timeline": self.log_data(), "frame_from": frame_from, "frame_to": frame_to},
+        )
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 for frame_index in range(frame_from + 1, frame_to + 1):
@@ -636,33 +702,6 @@ class Track:
                 **self.logger_extra,
             },
         )
-
-    def is_object_disapeared(self, timeline: Timeline, frame_index: int, figures: List[FigureInfo]):
-        dissapear_threshold = 0.5
-        dissapear_frames = 10
-        for tracklet in timeline.tracklets:
-            if tracklet.start_frame < frame_index <= tracklet.end_frame:
-                this_area = sum([utils.maybe_literal_eval(figure.area) for figure in figures])
-                last_areas = [
-                    tracklet.area_hist[fr_idx]
-                    for fr_idx in sorted(tracklet.area_hist.keys())[-dissapear_frames:]
-                ]
-                if len(last_areas) < dissapear_frames - 1:
-                    return False
-                last_areas.append(this_area)
-                med = tracklet.median_area()
-                if all([area < med * dissapear_threshold for area in last_areas]):
-                    sly.logger.debug(
-                        "Object disapeared",
-                        extra={
-                            "timeline": timeline.log_data(),
-                            "median": med,
-                            "last_areas": last_areas,
-                        },
-                    )
-                    return True
-                return False
-        return False
 
     # Updates
     def append_update(self, update: Update):
@@ -1153,15 +1192,10 @@ class Track:
 
             # filter disappearing figures
             for tl_index, timeline_predictions in enumerate(batch_predictions):
-                timeline = self.timelines[timelines_indexes[tl_index]]
-                removed_object_frame_idxs = set()
-                for fr_index, frame_predictions in enumerate(timeline_predictions):
-                    if self.is_object_disapeared(
-                        timeline, frame_from + fr_index, frame_predictions
-                    ):
-                        removed_object_frame_idxs.add(fr_index)
-                    if fr_index in removed_object_frame_idxs:
-                        frame_predictions.clear()
+                timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
+                batch_predictions[tl_index] = timeline.filter_for_disapeared_objects(
+                    frame_from, frame_to, timeline_predictions
+                )
 
             self.logger.debug(
                 "Predictions after filtering",
