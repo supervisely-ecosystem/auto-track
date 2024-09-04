@@ -651,7 +651,14 @@ class Track:
                 last_areas.append(this_area)
                 med = tracklet.median_area()
                 if all([area < med * dissapear_threshold for area in last_areas]):
-                    sly.logger.debug("Object disapeared", extra={"timeline": timeline.log_data(), "median": med, "last_areas": last_areas})
+                    sly.logger.debug(
+                        "Object disapeared",
+                        extra={
+                            "timeline": timeline.log_data(),
+                            "median": med,
+                            "last_areas": last_areas,
+                        },
+                    )
                     return True
                 return False
         return False
@@ -1132,6 +1139,17 @@ class Track:
             )
             batch_predictions: List[List[List[FigureInfo]]]
 
+            self.logger.debug(
+                "Predictions before filtering",
+                extra={
+                    "timelines count": len(batch_predictions),
+                    "frame_predictions_counts": [len(tl) for tl in batch_predictions],
+                    "per_frame_predictions_counts": [
+                        len(frame) for tl in batch_predictions for frame in tl
+                    ],
+                },
+            )
+
             # filter disappearing figures
             for tl_index, timeline_predictions in enumerate(batch_predictions):
                 timeline = self.timelines[timelines_indexes[tl_index]]
@@ -1143,6 +1161,17 @@ class Track:
                         removed_object_frame_idxs.add(fr_index)
                     if fr_index in removed_object_frame_idxs:
                         frame_predictions.clear()
+
+            self.logger.debug(
+                "Predictions after filtering",
+                extra={
+                    "timelines count": len(batch_predictions),
+                    "frame_predictions_counts": [len(tl) for tl in batch_predictions],
+                    "per_frame_predictions_counts": [
+                        len(frame) for tl in batch_predictions for frame in tl
+                    ],
+                },
+            )
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
