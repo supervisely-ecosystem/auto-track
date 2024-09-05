@@ -81,9 +81,7 @@ class Tracklet:
         if len(figures) == 0:
             return
 
-        self.area_hist[frame_index] = sum(
-            [utils.maybe_literal_eval(figure.area) for figure in figures]
-        )
+        self.area_hist[frame_index] = sum([utils.get_figure_area(figure) for figure in figures])
         self.last_tracked = (frame_index, figures)
 
     def median_area(self):
@@ -213,9 +211,7 @@ class Timeline:
                     tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())
                 ]
                 for frame_i, frame_predictions in enumerate(predictions):
-                    this_area = sum(
-                        [utils.maybe_literal_eval(figure.area) for figure in frame_predictions]
-                    )
+                    this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
                     last_areas.append(this_area)
                     med = sorted(last_areas)[len(last_areas) // 2]
                     if all(

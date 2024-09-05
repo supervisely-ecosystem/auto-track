@@ -229,3 +229,11 @@ def maybe_literal_eval(area):
     if isinstance(area, str):
         return ast.literal_eval(area)
     return area
+
+
+def get_figure_area(figure_info: FigureInfo) -> float:
+    if isinstance(figure_info.area, str):
+        return ast.literal_eval(figure_info.area)
+    if figure_info.area is None:
+        return sly.deserialize_geometry(figure_info.geometry_type, figure_info.geometry).area
+    return figure_info.area
