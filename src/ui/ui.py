@@ -1,7 +1,4 @@
-from supervisely.app.widgets import (
-    Container,
-    Text,
-)
+from supervisely.app.widgets import Container, Text, InputNumber, Card, Field
 
 import src.globals as g
 from .common import GEOMETRY_CARDS
@@ -18,10 +15,28 @@ select_nn_settings_description_text = Text(
     ),
     font_size=15,
 )
+disapear_parameters = Text()
+disapear_threshold = InputNumber(min=0.05, max=0.95, step=0.05, value=0.5)
+disapear_threshold_field = Field(
+    disapear_threshold,
+    "Disapear threshold",
+    "Threshold for object disapearance. If object's area is less than median area * threshold for N frames, object will be considered as disapeared.",
+)
+disapear_frames = InputNumber(min=1, max=100, step=1, value=5)
+disapear_frames_field = Field(
+    disapear_frames,
+    "Disapear frames",
+    "Number of frames to wait before considering object as disapeared.",
+)
+disapear_parameters_card = Card(
+    title="Disapear parameters",
+    content=Container(widgets=[disapear_threshold_field, disapear_frames_field]),
+)
 
 layout = Container(
     widgets=[
         Container(widgets=[select_nn_settings_text, select_nn_settings_description_text], gap=5),
+        disapear_parameters_card,
         *[card.card for card in GEOMETRY_CARDS.values()],
     ]
 )
@@ -46,3 +61,7 @@ def get_nn_settings():
                 settings[geometry_name] = {"task_id": session}
 
     return settings
+
+
+def get_disapear_parameters():
+    return (disapear_threshold.get_value(), disapear_frames.get_value())

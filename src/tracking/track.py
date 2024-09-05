@@ -202,8 +202,11 @@ class Timeline:
     def filter_for_disapeared_objects(
         self, frame_from, frame_to, predictions: List[List[FigureInfo]]
     ):
-        dissapear_threshold = 0.5
-        dissapear_frames = 3
+        dissapear_threshold, dissapear_frames = self.track.disapear_params
+        if dissapear_threshold is None:
+            dissapear_threshold = 0.5
+        if dissapear_frames is None:
+            dissapear_frames = 5
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 last_areas = [
@@ -524,6 +527,7 @@ class Track:
         user_id: int = None,
         cloud_token: str = None,
         cloud_action_id: str = None,
+        disapear_params: Tuple[float, int] = None,
     ):
         self.track_id = track_id
         self.api = api
@@ -543,6 +547,7 @@ class Track:
         self.nn_settings = nn_settings
         self.frames_count = frames_count
         self.frame_ranges = [(frame_index, frame_index + frames_count)]
+        self.disapear_params = disapear_params
 
         self.logger = self.api.logger
         self.logger_extra = {
@@ -1355,6 +1360,7 @@ def track(
     update_type: str = "track",
     cloud_token: str = None,
     cloud_action_id: str = None,
+    disapear_params: Tuple[float, int] = None,
 ):
     sly.logger.debug("track", extra={"context": context, "nn_settings": nn_settings})
 
@@ -1377,6 +1383,7 @@ def track(
                     tracks_to_update.add(track_id)
             for track_id in tracks_to_update:
                 cur_track = g.current_tracks[track_id]
+                cur_track.disapear_params = disapear_params
                 threading.Thread(target=cur_track.apply_updates).start()
         return
 
@@ -1397,6 +1404,7 @@ def track(
                 )
             )
             cur_track.apply_updates()
+            cur_track.disapear_params = disapear_params
             return
         else:
             api.logger.info("Track not found. Starting new one", extra={"track_id": track_id})
@@ -1422,6 +1430,7 @@ def track(
                 tracks_to_update.add(cur_track.track_id)
         for track_id in tracks_to_update:
             cur_track = g.current_tracks[track_id]
+            cur_track.disapear_params = disapear_params
             threading.Thread(target=cur_track.apply_updates).start()
         return
 
@@ -1443,6 +1452,7 @@ def track(
                 tracks_to_update.add(cur_track.track_id)
         for track_id in tracks_to_update:
             cur_track = g.current_tracks[track_id]
+            cur_track.disapear_params = disapear_params
             threading.Thread(target=cur_track.apply_updates).start()
         return
 
@@ -1462,6 +1472,7 @@ def track(
         if cur_track is not None:
             api.logger.info("Figure changed. Update tracking", extra={"track_id": track_id})
             cur_track.append_update(Update(object_ids, frame_index, frames_count, update_type))
+            cur_track.disapear_params = disapear_params
             return
         api.retry_count = 1
         cur_track = Track(
@@ -1476,6 +1487,7 @@ def track(
             user_id=user_id,
             cloud_token=cloud_token,
             cloud_action_id=cloud_action_id,
+            disapear_params=disapear_params,
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track
