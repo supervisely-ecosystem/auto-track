@@ -252,12 +252,11 @@ def get_figures_center(figures: List[FigureInfo]):
 
 
 def detect_movement_anomaly(
-    this_center: Tuple[float, float], last_centers: List[Tuple[float, float]]
+    this_center: Tuple[float, float], last_centers: List[Tuple[float, float]], multiplier: float = 5
 ) -> bool:
     if len(last_centers) < 3:
         return False
 
-    base_multiplier = 5
     variability_weight = 1
 
     max_distance = None
@@ -278,7 +277,7 @@ def detect_movement_anomaly(
     # threshold = (np.mean(distances) + base_multiplier * np.std(distances)) * (
     #     1 + variability_weight * variability
     # )
-    threshold = max_distance * base_multiplier
+    threshold = max_distance * multiplier
     deviation = np.linalg.norm(np.array(this_center) - expected_position)
     if deviation > threshold:
         sly.logger.debug(

@@ -28,9 +28,15 @@ disapear_frames_field = Field(
     "Disapear frames",
     "Number of frames to wait before considering object as disapeared.",
 )
+multiplier = InputNumber(min=0.5, max=100, step=0.1, value=5)
+multiplier_field = Field(
+    multiplier,
+    "Distance deviation multiplier",
+    "Multiplier for distance deviation threshold. If object's distance deviation from expected position is greater than max distance * multiplier, object will be considered as moved.",
+)
 disapear_parameters_card = Card(
     title="Disapear parameters",
-    content=Container(widgets=[disapear_threshold_field, disapear_frames_field]),
+    content=Container(widgets=[disapear_threshold_field, disapear_frames_field, multiplier_field]),
 )
 
 layout = Container(
@@ -64,4 +70,4 @@ def get_nn_settings():
 
 
 def get_disapear_parameters():
-    return (disapear_threshold.get_value(), disapear_frames.get_value())
+    return (disapear_threshold.get_value(), disapear_frames.get_value(), multiplier.get_value())

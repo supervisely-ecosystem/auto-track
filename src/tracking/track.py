@@ -202,11 +202,13 @@ class Timeline:
     def filter_for_disapeared_objects(
         self, frame_from, frame_to, predictions: List[List[FigureInfo]]
     ):
-        disapear_threshold, disapear_frames = self.track.disapear_params
+        disapear_threshold, disapear_frames, multiplier = self.track.disapear_params
         if disapear_threshold is None:
             disapear_threshold = 0.5
         if disapear_frames is None:
             disapear_frames = 5
+        if multiplier is None:
+            multiplier = 5
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 last_areas = [
@@ -223,7 +225,9 @@ class Timeline:
                     small_area = all(
                         [area < med * disapear_threshold for area in last_areas[-disapear_frames:]]
                     )
-                    jumped = utils.detect_movement_anomaly(this_center, last_centers)
+                    jumped = utils.detect_movement_anomaly(
+                        this_center, last_centers, multiplier=multiplier
+                    )
                     if small_area or jumped:
                         for i in range(frame_i, len(predictions)):
                             predictions[i] = []
