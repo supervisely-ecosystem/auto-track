@@ -220,15 +220,18 @@ class Timeline:
                     this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
                     last_areas.append(this_area)
                     med = sorted(last_areas)[len(last_areas) // 2]
-                    if all(
+                    small_area = all(
                         [area < med * disapear_threshold for area in last_areas[-disapear_frames:]]
-                    ) or utils.detect_movement_anomaly(this_center, last_centers):
+                    )
+                    jumped = utils.detect_movement_anomaly(this_center, last_centers)
+                    if small_area or jumped:
                         for i in range(frame_i, len(predictions)):
                             predictions[i] = []
                         sly.logger.debug(
                             "Object disapeared",
                             extra={
                                 "timeline": self.log_data(),
+                                "reason": "small_area" if small_area else "jumped",
                                 "frame_from": frame_from,
                                 "frame_index": frame_from + frame_i,
                                 "frame_to": frame_to,
