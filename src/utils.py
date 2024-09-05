@@ -257,21 +257,28 @@ def detect_movement_anomaly(
     if len(last_centers) < 3:
         return False
 
-    base_multiplier = 3
+    base_multiplier = 5
     variability_weight = 1
 
-    last_centers = np.array(last_centers[-30:])
+    max_distance = None
+    for i in range(len(last_centers) - 1):
+        distance = np.linalg.norm(np.array(last_centers[i + 1]) - np.array(last_centers[i]))
+        if max_distance is None or distance > max_distance:
+            max_distance = distance
+    last_centers = np.array(last_centers[-3:])
     velocities = [last_centers[i + 1] - last_centers[i] for i in range(len(last_centers) - 1)]
-    distances = [np.linalg.norm(velocity) for velocity in velocities]
+    # distances = [np.linalg.norm(velocity) for velocity in velocities]
+    # distances = distances[-30:]
 
     last_velocity = velocities[-1]
     previous_velocity = velocities[-2]
     acceleration = last_velocity - previous_velocity
     expected_position = last_centers[-1] + last_velocity + 0.5 * acceleration
-    variability = np.std(distances)
-    threshold = (np.mean(distances) + base_multiplier * np.std(distances)) * (
-        1 + variability_weight * variability
-    )
+    # variability = np.std(distances)
+    # threshold = (np.mean(distances) + base_multiplier * np.std(distances)) * (
+    #     1 + variability_weight * variability
+    # )
+    threshold = max_distance * base_multiplier
     deviation = np.linalg.norm(np.array(this_center) - expected_position)
     if deviation > threshold:
         sly.logger.debug(
@@ -281,7 +288,7 @@ def detect_movement_anomaly(
                 "threshold": threshold,
                 "expected_position": expected_position,
                 "this_center": this_center,
-                "variability": variability,
+                # "variability": variability,
             },
         )
         return True
