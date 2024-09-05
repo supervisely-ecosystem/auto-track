@@ -434,6 +434,7 @@ class Timeline:
                     figures = predictions.pop(0)
                     if len(figures) == 0:  # objects dissapear
                         tracklet.update(frame_index, figures, stop=True)
+                        return
                     else:
                         tracklet.update(frame_index, figures)
                 return
