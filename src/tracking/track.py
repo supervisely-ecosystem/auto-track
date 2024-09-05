@@ -58,6 +58,7 @@ class Tracklet:
         self.end_frame = end_frame
         self.last_tracked = (start_frame, figures)
         self.area_hist = {}
+        self.center_hist = {}
 
     def continue_tracklet(self, frame_to: int):
         if frame_to <= self.end_frame:
@@ -82,6 +83,7 @@ class Tracklet:
             return
 
         self.area_hist[frame_index] = sum([utils.get_figure_area(figure) for figure in figures])
+        self.center_hist[frame_index] = utils.get_figures_center(figures)
         self.last_tracked = (frame_index, figures)
 
     def median_area(self):
@@ -171,20 +173,20 @@ class Timeline:
             )
         )
 
-        # dissapear_threshold = 0.5
-        # dissapear_frames = 10
+        # disapear_threshold = 0.5
+        # disapear_frames = 10
         # for tracklet in timeline.tracklets:
         #     if tracklet.start_frame < frame_index <= tracklet.end_frame:
         #         this_area = sum([utils.maybe_literal_eval(figure.area) for figure in figures])
         #         last_areas = [
         #             tracklet.area_hist[fr_idx]
-        #             for fr_idx in sorted(tracklet.area_hist.keys())[-dissapear_frames:]
+        #             for fr_idx in sorted(tracklet.area_hist.keys())[-disapear_frames:]
         #         ]
-        #         if len(last_areas) < dissapear_frames - 1:
+        #         if len(last_areas) < disapear_frames - 1:
         #             return False
         #         last_areas.append(this_area)
         #         med = tracklet.median_area()
-        #         if all([area < med * dissapear_threshold for area in last_areas]):
+        #         if all([area < med * disapear_threshold for area in last_areas]):
         #             sly.logger.debug(
         #                 "Object disapeared",
         #                 extra={
@@ -200,40 +202,45 @@ class Timeline:
     def filter_for_disapeared_objects(
         self, frame_from, frame_to, predictions: List[List[FigureInfo]]
     ):
-        dissapear_threshold, dissapear_frames = self.track.disapear_params
-        if dissapear_threshold is None:
-            dissapear_threshold = 0.5
-        if dissapear_frames is None:
-            dissapear_frames = 5
+        disapear_threshold, disapear_frames = self.track.disapear_params
+        if disapear_threshold is None:
+            disapear_threshold = 0.5
+        if disapear_frames is None:
+            disapear_frames = 5
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 last_areas = [
                     tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())
                 ]
+                last_centers = [
+                    tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
+                ]
                 for frame_i, frame_predictions in enumerate(predictions):
+                    this_center = utils.get_figures_center(frame_predictions)
                     this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
                     last_areas.append(this_area)
                     med = sorted(last_areas)[len(last_areas) // 2]
                     if all(
-                        [
-                            area < med * dissapear_threshold
-                            for area in last_areas[-dissapear_frames:]
-                        ]
-                    ):
+                        [area < med * disapear_threshold for area in last_areas[-disapear_frames:]]
+                    ) or utils.detect_movement_anomaly(this_center, last_centers):
                         for i in range(frame_i, len(predictions)):
                             predictions[i] = []
                         sly.logger.debug(
                             "Object disapeared",
                             extra={
                                 "timeline": self.log_data(),
-                                "median": med,
-                                "last_areas": last_areas[-dissapear_frames:],
                                 "frame_from": frame_from,
                                 "frame_index": frame_from + frame_i,
                                 "frame_to": frame_to,
+                                "median": med,
+                                "last_areas": last_areas[-disapear_frames:],
+                                "this_area": this_area,
+                                "this_center": this_center,
+                                "last_centers": last_centers[-10:],
                             },
                         )
                         return predictions
+                    last_areas.append(this_area)
                 return predictions
         return predictions
 

@@ -237,3 +237,37 @@ def get_figure_area(figure_info: FigureInfo) -> float:
     if figure_info.area is None:
         return sly.deserialize_geometry(figure_info.geometry_type, figure_info.geometry).area
     return figure_info.area
+
+
+def get_figures_center(figures: List[FigureInfo]):
+    figure_boxes_centers: List[sly.Rectangle] = [
+        sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox().center
+        for figure in figures
+    ]
+    centroid = (
+        sum([center.row for center in figure_boxes_centers]) / len(figure_boxes_centers),
+        sum([center.col for center in figure_boxes_centers]) / len(figure_boxes_centers),
+    )
+    return centroid
+
+
+def detect_movement_anomaly(
+    this_center: Tuple[float, float], last_centers: List[Tuple[float, float]]
+) -> bool:
+    if len(last_centers) < 3:
+        return False
+
+    last_centers = np.array(last_centers[-30:])
+    velocities = [last_centers[i + 1] - last_centers[i] for i in range(len(last_centers) - 1)]
+    distances = [np.linalg.norm(velocity) for velocity in velocities]
+
+    last_velocity = velocities[-1]
+    previous_velocity = velocities[-2]
+    acceleration = last_velocity - previous_velocity
+    expected_position = last_centers[-1] + last_velocity + 0.5 * acceleration
+
+    deviation = np.linalg.norm(np.array(this_center) - expected_position)
+    threshold = np.mean(distances) + 2 * np.std(distances)
+    if deviation > threshold:
+        return True
+    return False
