@@ -219,6 +219,13 @@ class Timeline:
         disappear_by_distance = self.track.disappear_params.get("disappear_by_distance", {})
         disappear_by_distance_enabled = disappear_by_distance.get("enabled", False)
         disappear_by_distance_multiplier = disappear_by_distance.get("multiplier", 5)
+        disappear_by_distance_position_deviation = disappear_by_distance.get(
+            "position_deviation", 1
+        )
+        disappear_by_distance_velocity_deviation = disappear_by_distance.get(
+            "velocity_deviation", 0.5
+        )
+        disappear_by_distance_measure = disappear_by_distance.get("measure", 3)
 
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
@@ -247,6 +254,9 @@ class Timeline:
                             multiplier=disappear_by_distance_multiplier,
                             kalman_filter=self.track.kalman_filter,
                             tracklet=tracklet,
+                            position_deviation=disappear_by_distance_position_deviation,
+                            velocity_deviation=disappear_by_distance_velocity_deviation,
+                            measure_deviation=disappear_by_distance_measure,
                         )
                     if small_area or jumped:
                         for i in range(frame_i, len(predictions)):

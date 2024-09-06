@@ -265,7 +265,7 @@ def detect_size_shrinkage(
 
 
 class KalmanFilter(object):
-    def __init__(self, pos_std=1, vel_std=0.5, x_std_meas=3, y_std_meas=3):
+    def __init__(self, pos_std=1, vel_std=0.5, std_meas=3):
         self.F = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]])
         self.H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
 
@@ -275,7 +275,7 @@ class KalmanFilter(object):
         self.Q[2, 2] = vel_std**2
         self.Q[3, 3] = vel_std**2
 
-        self.R = np.array([[x_std_meas**2, 0], [0, y_std_meas**2]])
+        self.R = np.array([[std_meas**2, 0], [0, std_meas**2]])
 
     def predict(self, mean, covariance):
         return (
@@ -344,12 +344,25 @@ def detect_movement_anomaly(
     multiplier: float = 5,
     kalman_filter: KalmanFilter = None,
     tracklet=None,
+    position_deviation: float = 1,
+    velocity_deviation: float = 0.5,
+    measure_deviation: float = 3,
 ) -> bool:
     if tracklet.mean is None:
         tracklet.mean = np.array([*this_center, 0, 0], dtype=float)
 
     if kalman_filter is None:
-        kalman_filter = KalmanFilter()
+        kalman_filter = KalmanFilter(position_deviation, velocity_deviation, measure_deviation)
+    else:
+        if position_deviation is not None:
+            kalman_filter.Q[0, 0] = position_deviation**2
+            kalman_filter.Q[1, 1] = position_deviation**2
+        if velocity_deviation is not None:
+            kalman_filter.Q[2, 2] = velocity_deviation**2
+            kalman_filter.Q[3, 3] = velocity_deviation**2
+        if measure_deviation is not None:
+            kalman_filter.R[0, 0] = measure_deviation**2
+            kalman_filter.R[1, 1] = measure_deviation**2
 
     new_mean, new_covariance = kalman_filter.predict(tracklet.mean, tracklet.covariance)
     updated_mean, updated_covariance = kalman_filter.update(new_mean, new_covariance, this_center)
