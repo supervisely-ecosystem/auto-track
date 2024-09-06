@@ -251,6 +251,37 @@ def get_figures_center(figures: List[FigureInfo]):
     return centroid
 
 
+class KalmanFilter(object):
+    def __init__(self, pos_std=0.5, vel_std=0.2, x_std_meas=2, y_std_meas=2):
+        self.F = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]])
+        self.H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+
+        self.Q = np.eye(4)
+        self.Q[0, 0] = pos_std**2
+        self.Q[1, 1] = pos_std**2
+        self.Q[2, 2] = vel_std**2
+        self.Q[3, 3] = vel_std**2
+
+        self.R = np.array([[x_std_meas**2, 0], [0, y_std_meas**2]])
+
+    def predict(self, mean, covariance):
+        return (
+            np.dot(self.F, mean),
+            np.dot(np.dot(self.F, covariance), self.F.T) + self.Q,
+        )
+
+    def update(self, mean, covariance, measurement):
+        z = np.array(measurement)
+        PHT = np.dot(covariance, self.H.T)
+        S = np.dot(self.H, PHT) + self.R
+        K = np.dot(PHT, np.linalg.inv(S))
+        y = z - np.dot(self.H, mean)
+        new_mean = mean + np.dot(K, y)
+        I = np.eye(self.H.shape[1])
+        new_covariance = np.dot((I - np.dot(K, self.H)), covariance)
+        return new_mean, new_covariance
+
+
 # def detect_movement_anomaly(
 #     this_center: Tuple[float, float], last_centers: List[Tuple[float, float]], multiplier: float = 5
 # ) -> bool:
@@ -295,19 +326,29 @@ def get_figures_center(figures: List[FigureInfo]):
 
 
 def detect_movement_anomaly(
-    this_center: Tuple[float, float], last_centers: List[Tuple[float, float]], multiplier: float = 5
+    this_center: Tuple[float, float],
+    last_centers: List[Tuple[float, float]],
+    multiplier: float = 5,
+    kalman_filter: KalmanFilter = None,
+    tracklet=None,
 ) -> bool:
-    if len(last_centers) < 3:
+    if tracklet.mean is None:
+        tracklet.mean = np.array([*this_center, 0, 0], dtype=float)
+
+    if kalman_filter is None:
+        kalman_filter = KalmanFilter()
+
+    new_mean, new_covariance = kalman_filter.predict(tracklet.mean, tracklet.covariance)
+    updated_mean, updated_covariance = kalman_filter.update(new_mean, new_covariance, this_center)
+    tracklet.mean = updated_mean
+    tracklet.covariance = updated_covariance
+
+    if len(last_centers) < 10:  # low number of frames
         return False
 
-    last_centers = np.array(last_centers[-10:])
-    distances = [
-        np.linalg.norm(last_centers[i + 1] - last_centers[i]) for i in range(len(last_centers) - 1)
-    ]
-    mean_distance = np.mean(distances)
-
-    last_distance = np.linalg.norm(this_center - last_centers[-1])
-
-    if last_distance > mean_distance * multiplier:
+    deviation = np.linalg.norm(np.array(this_center) - new_mean[:2])
+    threshold = np.sqrt(new_covariance[0, 0] + new_covariance[1, 1]) * multiplier
+    if deviation > threshold:
         return True
+
     return False

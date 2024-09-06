@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 
+import numpy as np
 import requests
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
@@ -59,6 +60,8 @@ class Tracklet:
         self.last_tracked = (start_frame, figures)
         self.area_hist = {}
         self.center_hist = {}
+        self.mean = None
+        self.covariance = np.eye(4) * 1000.0
 
     def continue_tracklet(self, frame_to: int):
         if frame_to <= self.end_frame:
@@ -225,9 +228,15 @@ class Timeline:
                     small_area = all(
                         [area < med * disapear_threshold for area in last_areas[-disapear_frames:]]
                     )
-                    jumped = utils.detect_movement_anomaly(
-                        this_center, last_centers, multiplier=multiplier
-                    )
+                    jumped = False
+                    if not small_area:
+                        jumped = utils.detect_movement_anomaly(
+                            this_center,
+                            last_centers,
+                            multiplier=multiplier,
+                            kalman_filter=self.track.kalman_filter,
+                            tracklet=tracklet,
+                        )
                     if small_area or jumped:
                         for i in range(frame_i, len(predictions)):
                             predictions[i] = []
@@ -559,6 +568,7 @@ class Track:
         self.frames_count = frames_count
         self.frame_ranges = [(frame_index, frame_index + frames_count)]
         self.disapear_params = disapear_params
+        self.kalman_filter = utils.KalmanFilter()
 
         self.logger = self.api.logger
         self.logger_extra = {
