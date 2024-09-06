@@ -251,6 +251,19 @@ def get_figures_center(figures: List[FigureInfo]):
     return centroid
 
 
+def detect_size_shrinkage(
+    this_area, last_areas, disappear_by_area_threshold, disappear_by_area_frames
+):
+    med = sorted(last_areas)[len(last_areas) // 2]
+    last_areas.append(this_area)
+    return all(
+        [
+            area < med * disappear_by_area_threshold
+            for area in last_areas[-disappear_by_area_frames:]
+        ]
+    )
+
+
 class KalmanFilter(object):
     def __init__(self, pos_std=1, vel_std=0.5, x_std_meas=3, y_std_meas=3):
         self.F = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]])

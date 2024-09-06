@@ -3,7 +3,7 @@ import supervisely as sly
 from fastapi import BackgroundTasks, Request, Response
 
 import src.globals as g
-from src.ui import layout, get_nn_settings, update_all_nn, get_disapear_parameters
+from src.ui import layout, get_nn_settings, update_all_nn, get_disappear_parameters
 from src.tracking import track, cache_video
 from src.tracking.track import Update
 
@@ -17,7 +17,7 @@ def start_track(request: Request, task: BackgroundTasks):
     """Start a new track or add new objects to the existing track."""
     sly.logger.debug("recieved call to /track")
     nn_settings = get_nn_settings()
-    disapear_params = get_disapear_parameters()
+    disappear_params = get_disappear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
@@ -31,7 +31,7 @@ def start_track(request: Request, task: BackgroundTasks):
         nn_settings,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
-        disapear_params=disapear_params,
+        disappear_params=disappear_params,
     )
     return {"message": "Track task started."}
 
@@ -42,7 +42,6 @@ def start_cache_video(request: Request, task: BackgroundTasks):
     Request should contain the server_address and api_token"""
     sly.logger.debug("recieved call to /cache_video")
     nn_settings = get_nn_settings()
-    disapear_params = get_disapear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
@@ -83,7 +82,7 @@ def continue_track(request: Request, task: BackgroundTasks):
     """
     sly.logger.debug("recieved call to /continue_track")
     nn_settings = get_nn_settings()
-    disapear_params = get_disapear_parameters()
+    disappear_params = get_disappear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
@@ -98,7 +97,7 @@ def continue_track(request: Request, task: BackgroundTasks):
         Update.Type.CONTINUE,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
-        disapear_params=disapear_params,
+        disappear_params=disappear_params,
     )
     return {"message": "Track task started."}
 
@@ -108,7 +107,7 @@ def objects_removed(request: Request, task: BackgroundTasks):
     """Objects removed from tracking on specific frames"""
     sly.logger.debug("recieved call to /objects_removed")
     nn_settings = get_nn_settings()
-    disapear_params = get_disapear_parameters()
+    disappear_params = get_disappear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
@@ -123,7 +122,7 @@ def objects_removed(request: Request, task: BackgroundTasks):
         Update.Type.DELETE,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
-        disapear_params=disapear_params,
+        disappear_params=disappear_params,
     )
     return {"message": "Objects removed."}
 
@@ -133,7 +132,7 @@ def tag_removed(request: Request, task: BackgroundTasks):
     """Remove no-objects tag"""
     sly.logger.debug("recieved call to /tag_removed", extra={"context": request.state.context})
     nn_settings = get_nn_settings()
-    disapear_params = get_disapear_parameters()
+    disappear_params = get_disappear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
@@ -148,7 +147,7 @@ def tag_removed(request: Request, task: BackgroundTasks):
         Update.Type.REMOVE_TAG,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
-        disapear_params=disapear_params,
+        disappear_params=disappear_params,
     )
 
 
@@ -159,7 +158,7 @@ def manual_objects_removed(request: Request, task: BackgroundTasks):
         "recieved call to /manual_objects_removed", extra={"context": request.state.context}
     )
     nn_settings = get_nn_settings()
-    disapear_params = get_disapear_parameters()
+    disappear_params = get_disappear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
@@ -174,7 +173,7 @@ def manual_objects_removed(request: Request, task: BackgroundTasks):
         Update.Type.MANUAL_OBJECTS_REMOVED,
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
-        disapear_params=disapear_params,
+        disappear_params=disappear_params,
     )
 
 
