@@ -61,7 +61,9 @@ class Tracklet:
         self.area_hist = {}
         self.center_hist = {}
         self.mean = None
-        self.covariance = np.eye(4) * 1000.0
+        self.covariance = np.eye(4)
+        self.covariance[0, 0] = self.covariance[1, 1] = 10.0
+        self.covariance[2, 2] = self.covariance[3, 3] = 100.0
 
     def continue_tracklet(self, frame_to: int):
         if frame_to <= self.end_frame:
