@@ -369,7 +369,7 @@ def detect_movement_anomaly(
     tracklet.mean = updated_mean
     tracklet.covariance = updated_covariance
 
-    if len(last_centers) < 10:  # low number of frames
+    if len(last_centers) < 3:  # low number of frames
         return False
 
     deviation = np.linalg.norm(np.array(this_center) - new_mean[:2])
