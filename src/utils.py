@@ -252,7 +252,7 @@ def get_figures_center(figures: List[FigureInfo]):
 
 
 class KalmanFilter(object):
-    def __init__(self, pos_std=0.5, vel_std=0.2, x_std_meas=2, y_std_meas=2):
+    def __init__(self, pos_std=1, vel_std=0.5, x_std_meas=3, y_std_meas=3):
         self.F = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]])
         self.H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
 
