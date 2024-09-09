@@ -579,7 +579,7 @@ class Track:
 
         self.object_ids = list(set(object_ids))
         self.nn_settings = nn_settings
-        self.frames_count = frames_count
+        self.frames_count = min(self.video_info.frames_count - frame_index, frames_count)
         self.frame_ranges = [(frame_index, frame_index + frames_count)]
         self.disappear_params = disappear_params
         self.kalman_filter = utils.KalmanFilter()
@@ -1192,7 +1192,8 @@ class Track:
                 )
             wait_update_time = wait_update_time.get_sec() - get_batch_time
 
-            if frame_from is None:
+            frames_count = frame_to - frame_from
+            if frame_from is None or frames_count == 0:
                 if self._upload_thread is not None and self._upload_thread.is_alive():
                     self._upload_thread.join()
                 if self.wait_for_updates():
@@ -1209,7 +1210,6 @@ class Track:
             )
 
             # billing reserve
-            frames_count = frame_to - frame_from
             expected_predictions_count = sum(
                 len(figures) * frames_count for figures in timelines_figures
             )
