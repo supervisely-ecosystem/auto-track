@@ -254,6 +254,8 @@ def get_figures_center(figures: List[FigureInfo]):
 def detect_size_shrinkage(
     this_area, last_areas, disappear_by_area_threshold, disappear_by_area_frames
 ):
+    if len(last_areas) < disappear_by_area_frames:
+        return False
     med = sorted(last_areas)[len(last_areas) // 2]
     last_areas.append(this_area)
     return all(
