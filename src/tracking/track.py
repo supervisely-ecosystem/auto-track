@@ -1192,8 +1192,7 @@ class Track:
                 )
             wait_update_time = wait_update_time.get_sec() - get_batch_time
 
-            frames_count = frame_to - frame_from
-            if frame_from is None or frames_count == 0:
+            if frame_from is None or frame_to - frame_from == 0:
                 if self._upload_thread is not None and self._upload_thread.is_alive():
                     self._upload_thread.join()
                 if self.wait_for_updates():
@@ -1210,6 +1209,7 @@ class Track:
             )
 
             # billing reserve
+            frames_count = frame_to - frame_from
             expected_predictions_count = sum(
                 len(figures) * frames_count for figures in timelines_figures
             )
