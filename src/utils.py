@@ -297,49 +297,6 @@ class KalmanFilter(object):
         return new_mean, new_covariance
 
 
-# def detect_movement_anomaly(
-#     this_center: Tuple[float, float], last_centers: List[Tuple[float, float]], multiplier: float = 5
-# ) -> bool:
-#     if len(last_centers) < 3:
-#         return False
-
-#     variability_weight = 1
-
-#     max_distance = None
-#     for i in range(len(last_centers) - 1):
-#         distance = np.linalg.norm(np.array(last_centers[i + 1]) - np.array(last_centers[i]))
-#         if max_distance is None or distance > max_distance:
-#             max_distance = distance
-#     last_centers = np.array(last_centers[-3:])
-#     velocities = [last_centers[i + 1] - last_centers[i] for i in range(len(last_centers) - 1)]
-#     # distances = [np.linalg.norm(velocity) for velocity in velocities]
-#     # distances = distances[-30:]
-
-#     last_velocity = velocities[-1]
-#     previous_velocity = velocities[-2]
-#     acceleration = last_velocity - previous_velocity
-#     expected_position = last_centers[-1] + last_velocity + 0.5 * acceleration
-#     # variability = np.std(distances)
-#     # threshold = (np.mean(distances) + base_multiplier * np.std(distances)) * (
-#     #     1 + variability_weight * variability
-#     # )
-#     threshold = max_distance * multiplier
-#     deviation = np.linalg.norm(np.array(this_center) - expected_position)
-#     if deviation > threshold:
-#         sly.logger.debug(
-#             f"Anomaly detected: deviation {deviation} is greater than threshold {threshold}",
-#             extra={
-#                 "deviation": deviation,
-#                 "threshold": threshold,
-#                 "expected_position": expected_position,
-#                 "this_center": this_center,
-#                 # "variability": variability,
-#             },
-#         )
-#         return True
-#     return False
-
-
 def detect_movement_anomaly(
     this_center: Tuple[float, float],
     last_centers: List[Tuple[float, float]],

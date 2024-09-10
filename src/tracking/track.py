@@ -91,9 +91,6 @@ class Tracklet:
         self.center_hist[frame_index] = utils.get_figures_center(figures)
         self.last_tracked = (frame_index, figures)
 
-    def median_area(self):
-        return sorted(self.area_hist.values())[len(self.area_hist) // 2]
-
     def cut(self, frame_index: int, remove_added_figures: bool = False):
         if frame_index < self.start_frame:
             return
@@ -102,6 +99,12 @@ class Tracklet:
         if remove_added_figures:
             self.clear(from_frame=frame_index, to_frame=self.end_frame)
         self.end_frame = frame_index - 1
+        for frame_index in self.area_hist:
+            if frame_index >= frame_index:
+                del self.area_hist[frame_index]
+        for frame_index in self.center_hist:
+            if frame_index >= frame_index:
+                del self.center_hist[frame_index]
 
     def clear(self, from_frame: int = None, to_frame: int = None):
         if from_frame is None:
@@ -166,43 +169,24 @@ class Timeline:
         self.key_figures: Dict[int, List[FigureInfo]] = find_key_figures(figures)
         self.no_object_frames: Set[int] = set()
         self.update_no_object_frames()
-        start_figures = [figure for figure in figures if figure.frame_index == start_frame]
+        frame_to_figure = {}
+        for figure in figures:
+            frame_to_figure.setdefault(figure.frame_index, []).append(figure)
+        start_figures = frame_to_figure.get(start_frame, [])
 
         self.tracklets: List[Tracklet] = []
-        self.tracklets.append(
-            Tracklet(
-                self,
-                start_frame,
-                self._find_end_frame(start_frame, end_frame - start_frame),
-                start_figures,
-            )
+        tracklet = Tracklet(
+            self,
+            start_frame,
+            self._find_end_frame(start_frame, end_frame - start_frame),
+            start_figures,
         )
-
-        # disappear_threshold = 0.5
-        # disappear_frames = 10
-        # for tracklet in timeline.tracklets:
-        #     if tracklet.start_frame < frame_index <= tracklet.end_frame:
-        #         this_area = sum([utils.maybe_literal_eval(figure.area) for figure in figures])
-        #         last_areas = [
-        #             tracklet.area_hist[fr_idx]
-        #             for fr_idx in sorted(tracklet.area_hist.keys())[-disappear_frames:]
-        #         ]
-        #         if len(last_areas) < disappear_frames - 1:
-        #             return False
-        #         last_areas.append(this_area)
-        #         med = tracklet.median_area()
-        #         if all([area < med * disappear_threshold for area in last_areas]):
-        #             sly.logger.debug(
-        #                 "Object disappeared",
-        #                 extra={
-        #                     "timeline": timeline.log_data(),
-        #                     "median": med,
-        #                     "last_areas": last_areas,
-        #                 },
-        #             )
-        #             return True
-        #         return False
-        # return False
+        for fr_index, figures in frame_to_figure.items():
+            tracklet.area_hist[fr_index] = sum(
+                [utils.get_figure_area(figure) for figure in figures]
+            )
+            tracklet.center_hist[fr_index] = utils.get_figures_center(figures=figures)
+        self.tracklets.append(tracklet)
 
     def filter_for_disappeared_objects(
         self, frame_from, frame_to, predictions: List[List[FigureInfo]]
@@ -328,6 +312,12 @@ class Timeline:
             if frame_index == tracklet.start_frame:
                 # reset tracklet
                 tracklet.update(frame_index, frame_figures)
+                tracklet.area_hist = {
+                    frame_index: sum([utils.get_figure_area(fig) for fig in frame_figures])
+                }
+                tracklet.center_hist = {
+                    frame_index: utils.get_figures_center(figures=frame_figures)
+                }
                 return
             if tracklet.start_frame < frame_index <= tracklet.end_frame:
                 # split tracklet
