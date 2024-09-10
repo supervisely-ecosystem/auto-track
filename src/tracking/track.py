@@ -1,3 +1,4 @@
+import ast
 from typing import List, Dict, Literal, NamedTuple, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor
 from logging import Logger
@@ -6,6 +7,7 @@ import threading
 import time
 import uuid
 
+import numpy as np
 import requests
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
@@ -56,6 +58,12 @@ class Tracklet:
         self.start_frame = start_frame
         self.end_frame = end_frame
         self.last_tracked = (start_frame, figures)
+        self.area_hist = {}
+        self.center_hist = {}
+        self.mean = None
+        self.covariance = np.eye(4)
+        self.covariance[0, 0] = self.covariance[1, 1] = 10.0
+        self.covariance[2, 2] = self.covariance[3, 3] = 100.0
 
     def continue_tracklet(self, frame_to: int):
         if frame_to <= self.end_frame:
@@ -72,7 +80,15 @@ class Tracklet:
             end_frame = i
         self.end_frame = end_frame
 
-    def update(self, frame_index: int, figures: List[FigureInfo]):
+    def update(self, frame_index: int, figures: List[FigureInfo], stop=False):
+        if stop:
+            self.end_frame = frame_index - 1
+            return
+        if len(figures) == 0:
+            return
+
+        self.area_hist[frame_index] = sum([utils.get_figure_area(figure) for figure in figures])
+        self.center_hist[frame_index] = utils.get_figures_center(figures)
         self.last_tracked = (frame_index, figures)
 
     def cut(self, frame_index: int, remove_added_figures: bool = False):
@@ -83,6 +99,12 @@ class Tracklet:
         if remove_added_figures:
             self.clear(from_frame=frame_index, to_frame=self.end_frame)
         self.end_frame = frame_index - 1
+        for frame_index in self.area_hist:
+            if frame_index >= frame_index:
+                del self.area_hist[frame_index]
+        for frame_index in self.center_hist:
+            if frame_index >= frame_index:
+                del self.center_hist[frame_index]
 
     def clear(self, from_frame: int = None, to_frame: int = None):
         if from_frame is None:
@@ -147,17 +169,94 @@ class Timeline:
         self.key_figures: Dict[int, List[FigureInfo]] = find_key_figures(figures)
         self.no_object_frames: Set[int] = set()
         self.update_no_object_frames()
-        start_figures = [figure for figure in figures if figure.frame_index == start_frame]
+        frame_to_figure = {}
+        for figure in figures:
+            frame_to_figure.setdefault(figure.frame_index, []).append(figure)
+        start_figures = frame_to_figure.get(start_frame, [])
 
         self.tracklets: List[Tracklet] = []
-        self.tracklets.append(
-            Tracklet(
-                self,
-                start_frame,
-                self._find_end_frame(start_frame, end_frame - start_frame),
-                start_figures,
-            )
+        tracklet = Tracklet(
+            self,
+            start_frame,
+            self._find_end_frame(start_frame, end_frame - start_frame),
+            start_figures,
         )
+        for fr_index, figures in frame_to_figure.items():
+            tracklet.area_hist[fr_index] = sum(
+                [utils.get_figure_area(figure) for figure in figures]
+            )
+            tracklet.center_hist[fr_index] = utils.get_figures_center(figures=figures)
+        self.tracklets.append(tracklet)
+
+    def filter_for_disappeared_objects(
+        self, frame_from, frame_to, predictions: List[List[FigureInfo]]
+    ):
+        filter_enabled = self.track.disappear_params.get("enabled", False)
+        if not filter_enabled:
+            return predictions
+
+        disappear_by_area_params = self.track.disappear_params.get("disappear_by_area", {})
+        disappear_by_area_enabled = disappear_by_area_params.get("enabled", False)
+        disappear_by_area_threshold = disappear_by_area_params.get("threshold", 0.5)
+        disappear_by_area_frames = disappear_by_area_params.get("frames", 5)
+
+        disappear_by_distance = self.track.disappear_params.get("disappear_by_distance", {})
+        disappear_by_distance_enabled = disappear_by_distance.get("enabled", False)
+        disappear_by_distance_multiplier = disappear_by_distance.get("multiplier", 5)
+        disappear_by_distance_position_deviation = disappear_by_distance.get(
+            "position_deviation", 1
+        )
+        disappear_by_distance_velocity_deviation = disappear_by_distance.get(
+            "velocity_deviation", 0.5
+        )
+        disappear_by_distance_measure = disappear_by_distance.get("measure", 3)
+
+        for tracklet in self.tracklets:
+            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
+                last_areas = [
+                    tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())
+                ]
+                last_centers = [
+                    tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
+                ]
+                for frame_i, frame_predictions in enumerate(predictions):
+                    this_center = utils.get_figures_center(frame_predictions)
+                    this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
+                    small_area = False
+                    if disappear_by_area_enabled:
+                        small_area = utils.detect_size_shrinkage(
+                            this_area,
+                            last_areas,
+                            disappear_by_area_threshold,
+                            disappear_by_area_frames,
+                        )
+                    jumped = False
+                    if not small_area and disappear_by_distance_enabled:
+                        jumped = utils.detect_movement_anomaly(
+                            this_center,
+                            last_centers,
+                            multiplier=disappear_by_distance_multiplier,
+                            kalman_filter=self.track.kalman_filter,
+                            tracklet=tracklet,
+                            position_deviation=disappear_by_distance_position_deviation,
+                            velocity_deviation=disappear_by_distance_velocity_deviation,
+                            measure_deviation=disappear_by_distance_measure,
+                        )
+                    if small_area or jumped:
+                        for i in range(frame_i, len(predictions)):
+                            predictions[i] = []
+                        sly.logger.debug(
+                            "Object disappeared",
+                            extra={
+                                "timeline": self.log_data(),
+                                "reason": "small_area" if small_area else "jumped",
+                                "frame_index": frame_from + frame_i,
+                            },
+                        )
+                        return predictions
+                    last_areas.append(this_area)
+                return predictions
+        return predictions
 
     def _find_end_frame(self, start_frame: int, frames_count) -> int:
         end_frame = start_frame
@@ -213,6 +312,12 @@ class Timeline:
             if frame_index == tracklet.start_frame:
                 # reset tracklet
                 tracklet.update(frame_index, frame_figures)
+                tracklet.area_hist = {
+                    frame_index: sum([utils.get_figure_area(fig) for fig in frame_figures])
+                }
+                tracklet.center_hist = {
+                    frame_index: utils.get_figures_center(figures=frame_figures)
+                }
                 return
             if tracklet.start_frame < frame_index <= tracklet.end_frame:
                 # split tracklet
@@ -331,10 +436,20 @@ class Timeline:
             tracklet for tracklet in self.tracklets if tracklet.start_frame != frame_index
         ]
 
-    def update(self, frame_index: int, figures: List[FigureInfo]):
+    def update(self, frame_from: int, frame_to: int, predictions: List[List[FigureInfo]]):
+        self.track.logger.debug(
+            "Update timeline",
+            extra={"timeline": self.log_data(), "frame_from": frame_from, "frame_to": frame_to},
+        )
         for tracklet in self.tracklets:
-            if tracklet.start_frame <= frame_index <= tracklet.end_frame:
-                tracklet.update(frame_index, figures)
+            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
+                for frame_index in range(frame_from + 1, frame_to + 1):
+                    figures = predictions.pop(0)
+                    if len(figures) == 0:  # objects dissapear
+                        tracklet.update(frame_index, figures, stop=True)
+                        return
+                    else:
+                        tracklet.update(frame_index, figures)
                 return
 
     def get_progress_total(self):
@@ -436,6 +551,7 @@ class Track:
         user_id: int = None,
         cloud_token: str = None,
         cloud_action_id: str = None,
+        disappear_params: Dict = None,
     ):
         self.track_id = track_id
         self.api = api
@@ -453,8 +569,10 @@ class Track:
 
         self.object_ids = list(set(object_ids))
         self.nn_settings = nn_settings
-        self.frames_count = frames_count
+        self.frames_count = min(self.video_info.frames_count - frame_index, frames_count)
         self.frame_ranges = [(frame_index, frame_index + frames_count)]
+        self.disappear_params = disappear_params
+        self.kalman_filter = utils.KalmanFilter()
 
         self.logger = self.api.logger
         self.logger_extra = {
@@ -551,12 +669,15 @@ class Track:
         self.end_frame = 0
 
     def update_timelines(
-        self, frame_to: int, timelines_indexes: List[int], predictions: List[List[List[FigureInfo]]]
+        self,
+        frame_from: int,
+        frame_to: int,
+        timelines_indexes: List[int],
+        predictions: List[List[List[FigureInfo]]],
     ):
         for timeline_index, timeline_predictions in zip(timelines_indexes, predictions):
             timeline = self.timelines[timeline_index]
-            timeline_last_predictions = timeline_predictions[-1]
-            timeline.update(frame_to, timeline_last_predictions)
+            timeline.update(frame_from, frame_to, timeline_predictions)
 
     def refresh_progress(self):
         total = 0
@@ -1061,7 +1182,7 @@ class Track:
                 )
             wait_update_time = wait_update_time.get_sec() - get_batch_time
 
-            if frame_from is None:
+            if frame_from is None or frame_to - frame_from == 0:
                 if self._upload_thread is not None and self._upload_thread.is_alive():
                     self._upload_thread.join()
                 if self.wait_for_updates():
@@ -1090,6 +1211,35 @@ class Track:
             )
             batch_predictions: List[List[List[FigureInfo]]]
 
+            self.logger.debug(
+                "Predictions before filtering",
+                extra={
+                    "timelines count": len(batch_predictions),
+                    "frame_predictions_counts": [len(tl) for tl in batch_predictions],
+                    "per_frame_predictions_counts": [
+                        len(frame) for tl in batch_predictions for frame in tl
+                    ],
+                },
+            )
+
+            # filter disappearing figures
+            for tl_index, timeline_predictions in enumerate(batch_predictions):
+                timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
+                batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
+                    frame_from, frame_to, timeline_predictions
+                )
+
+            self.logger.debug(
+                "Predictions after filtering",
+                extra={
+                    "timelines count": len(batch_predictions),
+                    "frame_predictions_counts": [len(tl) for tl in batch_predictions],
+                    "per_frame_predictions_counts": [
+                        len(frame) for tl in batch_predictions for frame in tl
+                    ],
+                },
+            )
+
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
                 self.upload_predictions,
@@ -1100,7 +1250,7 @@ class Track:
 
             # Update timelines
             update_timelines_time, _ = utils.time_it(
-                self.update_timelines, frame_to, timelines_indexes, batch_predictions
+                self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
             )
 
             frame_range = self.frame_ranges[0]
@@ -1235,6 +1385,7 @@ def track(
     update_type: str = "track",
     cloud_token: str = None,
     cloud_action_id: str = None,
+    disappear_params: Dict = None,
 ):
     sly.logger.debug("track", extra={"context": context, "nn_settings": nn_settings})
 
@@ -1257,6 +1408,7 @@ def track(
                     tracks_to_update.add(track_id)
             for track_id in tracks_to_update:
                 cur_track = g.current_tracks[track_id]
+                cur_track.disappear_params = disappear_params
                 threading.Thread(target=cur_track.apply_updates).start()
         return
 
@@ -1277,6 +1429,7 @@ def track(
                 )
             )
             cur_track.apply_updates()
+            cur_track.disappear_params = disappear_params
             return
         else:
             api.logger.info("Track not found. Starting new one", extra={"track_id": track_id})
@@ -1302,6 +1455,7 @@ def track(
                 tracks_to_update.add(cur_track.track_id)
         for track_id in tracks_to_update:
             cur_track = g.current_tracks[track_id]
+            cur_track.disappear_params = disappear_params
             threading.Thread(target=cur_track.apply_updates).start()
         return
 
@@ -1323,6 +1477,7 @@ def track(
                 tracks_to_update.add(cur_track.track_id)
         for track_id in tracks_to_update:
             cur_track = g.current_tracks[track_id]
+            cur_track.disappear_params = disappear_params
             threading.Thread(target=cur_track.apply_updates).start()
         return
 
@@ -1342,6 +1497,7 @@ def track(
         if cur_track is not None:
             api.logger.info("Figure changed. Update tracking", extra={"track_id": track_id})
             cur_track.append_update(Update(object_ids, frame_index, frames_count, update_type))
+            cur_track.disappear_params = disappear_params
             return
         api.retry_count = 1
         cur_track = Track(
@@ -1356,6 +1512,7 @@ def track(
             user_id=user_id,
             cloud_token=cloud_token,
             cloud_action_id=cloud_action_id,
+            disappear_params=disappear_params,
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track

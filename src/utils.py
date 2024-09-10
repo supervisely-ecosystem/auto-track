@@ -1,3 +1,4 @@
+import ast
 import functools
 from typing import Dict, List, Tuple, Type
 
@@ -153,6 +154,7 @@ def figure_from_prediction(
     tags: List = None,
     track_id: str = None,
 ) -> FigureInfo:
+    area = sly.deserialize_geometry(prediction.geometry_type, prediction.geometry_data).area
     return FigureInfo(
         id=figure_id,
         class_id=None,
@@ -168,7 +170,7 @@ def figure_from_prediction(
         geometry_meta=None,
         tags=tags,
         meta=prediction.meta.to_json() if prediction.meta is not None else {},
-        area=None,
+        area=area,
         track_id=track_id,
     )
 
@@ -221,3 +223,117 @@ def send_error_data(func):
         return value
 
     return wrapper
+
+
+def maybe_literal_eval(area):
+    if isinstance(area, str):
+        return ast.literal_eval(area)
+    return area
+
+
+def get_figure_area(figure_info: FigureInfo) -> float:
+    if isinstance(figure_info.area, str):
+        return ast.literal_eval(figure_info.area)
+    if figure_info.area is None:
+        return sly.deserialize_geometry(figure_info.geometry_type, figure_info.geometry).area
+    return figure_info.area
+
+
+def get_figures_center(figures: List[FigureInfo]):
+    figure_boxes_centers: List[sly.Rectangle] = [
+        sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox().center
+        for figure in figures
+    ]
+    centroid = (
+        sum([center.row for center in figure_boxes_centers]) / len(figure_boxes_centers),
+        sum([center.col for center in figure_boxes_centers]) / len(figure_boxes_centers),
+    )
+    return centroid
+
+
+def detect_size_shrinkage(
+    this_area, last_areas, disappear_by_area_threshold, disappear_by_area_frames
+):
+    if len(last_areas) < disappear_by_area_frames:
+        return False
+    med = sorted(last_areas)[len(last_areas) // 2]
+    last_areas.append(this_area)
+    return all(
+        [
+            area < med * disappear_by_area_threshold
+            for area in last_areas[-disappear_by_area_frames:]
+        ]
+    )
+
+
+class KalmanFilter(object):
+    def __init__(self, pos_std=1, vel_std=0.5, std_meas=3):
+        self.F = np.array([[1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0], [0, 0, 0, 1]])
+        self.H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+
+        self.Q = np.eye(4)
+        self.Q[0, 0] = pos_std**2
+        self.Q[1, 1] = pos_std**2
+        self.Q[2, 2] = vel_std**2
+        self.Q[3, 3] = vel_std**2
+
+        self.R = np.array([[std_meas**2, 0], [0, std_meas**2]])
+
+    def predict(self, mean, covariance):
+        return (
+            np.dot(self.F, mean),
+            np.dot(np.dot(self.F, covariance), self.F.T) + self.Q,
+        )
+
+    def update(self, mean, covariance, measurement):
+        z = np.array(measurement)
+        PHT = np.dot(covariance, self.H.T)
+        S = np.dot(self.H, PHT) + self.R
+        K = np.dot(PHT, np.linalg.inv(S))
+        y = z - np.dot(self.H, mean)
+        new_mean = mean + np.dot(K, y)
+        I = np.eye(self.H.shape[1])
+        new_covariance = np.dot((I - np.dot(K, self.H)), covariance)
+        return new_mean, new_covariance
+
+
+def detect_movement_anomaly(
+    this_center: Tuple[float, float],
+    last_centers: List[Tuple[float, float]],
+    multiplier: float = 5,
+    kalman_filter: KalmanFilter = None,
+    tracklet=None,
+    position_deviation: float = 1,
+    velocity_deviation: float = 0.5,
+    measure_deviation: float = 3,
+) -> bool:
+    if tracklet.mean is None:
+        tracklet.mean = np.array([*this_center, 0, 0], dtype=float)
+
+    if kalman_filter is None:
+        kalman_filter = KalmanFilter(position_deviation, velocity_deviation, measure_deviation)
+    else:
+        if position_deviation is not None:
+            kalman_filter.Q[0, 0] = position_deviation**2
+            kalman_filter.Q[1, 1] = position_deviation**2
+        if velocity_deviation is not None:
+            kalman_filter.Q[2, 2] = velocity_deviation**2
+            kalman_filter.Q[3, 3] = velocity_deviation**2
+        if measure_deviation is not None:
+            kalman_filter.R[0, 0] = measure_deviation**2
+            kalman_filter.R[1, 1] = measure_deviation**2
+
+    new_mean, new_covariance = kalman_filter.predict(tracklet.mean, tracklet.covariance)
+    updated_mean, updated_covariance = kalman_filter.update(new_mean, new_covariance, this_center)
+    tracklet.mean = updated_mean
+    tracklet.covariance = updated_covariance
+
+    if len(last_centers) < 3:  # low number of frames
+        return False
+
+    deviation = np.linalg.norm(np.array(this_center) - new_mean[:2])
+    threshold = np.sqrt(new_covariance[0, 0] + new_covariance[1, 1]) * multiplier
+    if deviation > threshold:
+        return True
+
+    return False
