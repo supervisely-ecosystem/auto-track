@@ -55,6 +55,7 @@ disappear_by_distance_velocity_deviation = InputNumber(min=0.5, max=10, step=0.0
 disappear_by_distance_velocity_deviation_field = Field(
     disappear_by_distance_velocity_deviation,
     "Velocity Standard Deviation",
+    "Represents how uncertain you are about the object's speed. Higher values mean you expect the object's speed to vary unpredictably.",
 )
 disappear_by_distance_measure = InputNumber(min=0.1, max=20, step=0.1, value=3)
 disappear_by_distance_measure_field = Field(
