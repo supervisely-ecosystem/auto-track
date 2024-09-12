@@ -1,4 +1,16 @@
-from supervisely.app.widgets import Container, Text, InputNumber, Card, Field, Switch, OneOf, Empty
+from typing import List, Union
+from supervisely.app.widgets import (
+    Container,
+    Text,
+    InputNumber,
+    Card,
+    Field,
+    Switch,
+    OneOf,
+    Empty,
+    Button,
+)
+from supervisely import logger
 
 import src.globals as g
 from .common import GEOMETRY_CARDS
@@ -92,6 +104,29 @@ disappear_parameters_switch_field = Field(
     content=disappear_parameters_switch, title="Switch to turn on object disappear detection"
 )
 disappear_parameters_one_of = OneOf(disappear_parameters_switch)
+
+
+disappear_parameters_inputs: List[Union[Switch, InputNumber]] = [
+    disappear_parameters_switch,
+    disappear_by_area_switch,
+    disappear_by_distance_switch,
+    disappear_threshold,
+    disappear_frames,
+    disappear_by_distance_multiplier,
+    disappear_by_distance_position_deviation,
+    disappear_by_distance_velocity_deviation,
+    disappear_by_distance_measure,
+]
+
+for input_ in disappear_parameters_inputs:
+    input_.value_changed(
+        lambda *args: logger.debug(
+            "Disappear parameters changed",
+            extra={"disappear_parameters": get_disappear_parameters()},
+        )
+    )
+
+
 disappear_parameters_card = Card(
     title="Disappear parameters",
     description="Parameters for object disappearance detection.",
