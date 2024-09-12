@@ -84,7 +84,7 @@ disappear_by_distance_field = Field(
 )
 
 disappear_parameters_switch = Switch(
-    switched=False,
+    switched=True,
     on_content=Container(widgets=[disappear_by_area_field, disappear_by_distance_field]),
     off_content=Empty(),
 )
@@ -108,8 +108,8 @@ disappear_parameters_card.collapse()
 layout = Container(
     widgets=[
         Container(widgets=[select_nn_settings_text, select_nn_settings_description_text], gap=5),
-        disappear_parameters_card,
         *[card.card for card in GEOMETRY_CARDS.values()],
+        disappear_parameters_card,
     ]
 )
 
