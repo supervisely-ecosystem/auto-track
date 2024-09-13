@@ -60,6 +60,7 @@ class Tracklet:
         self.last_tracked = (start_frame, figures)
         self.area_hist = {}
         self.center_hist = {}
+        self.bboxes_hist = {}
         self.mean = None
         self.covariance = np.eye(4)
         self.covariance[0, 0] = self.covariance[1, 1] = 10.0
@@ -89,6 +90,10 @@ class Tracklet:
 
         self.area_hist[frame_index] = sum([utils.get_figure_area(figure) for figure in figures])
         self.center_hist[frame_index] = utils.get_figures_center(figures)
+        self.bboxes_hist[frame_index] = [
+            sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox()
+            for figure in figures
+        ]
         self.last_tracked = (frame_index, figures)
 
     def cut(self, frame_index: int, remove_added_figures: bool = False):
@@ -977,9 +982,7 @@ class Track:
                     results[timeline_index][frame_index].append(predicted_figure)
         return results
 
-    def init_timelines_from_detections(
-        self, predictions: List[List[List[FigureInfo]]], frame_from: int, frame_to: int
-    ):
+    def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections = []
         unmatched_detections_frame = None
         threshhold = 0.5
@@ -989,11 +992,15 @@ class Track:
             self.api,
             self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
             self.video_id,
-            frame_from,
+            frame_from + 1,
             frame_to,
         )
         for i, frame_detections in enumerate(detections):
-            this_frame_predictions = [pred[i] for pred in predictions]
+            this_frame_predictions = []
+            for timeline in self.timelines:
+                for tracklet in timeline.tracklets:
+                    if tracklet.start_frame <= frame_from + i <= tracklet.end_frame:
+                        this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_from + i, []))
             # match detections to predictions
             prediction_boxes = []
             for object_figures in this_frame_predictions:
@@ -1326,8 +1333,6 @@ class Track:
                 },
             )
 
-            self.init_timelines_from_detections(batch_predictions, frame_from, frame_to)
-
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
                 self.upload_predictions,
@@ -1340,6 +1345,7 @@ class Track:
             update_timelines_time, _ = utils.time_it(
                 self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
             )
+            self.init_timelines_from_detections(frame_from, frame_to)
 
             frame_range = self.frame_ranges[0]
             for fr in self.frame_ranges[1:]:
