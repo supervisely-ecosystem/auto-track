@@ -1032,7 +1032,7 @@ class Track:
             video_object = sly.VideoObject(
                 obj_class=object_class, tags=sly.VideoTagCollection([sly.VideoTag(detected_obj_tm)])
             )
-            if not issubclass(object_class.geometry_type, [sly.AnyGeometry, type(label.geometry)]):
+            if not issubclass(object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))):
                 continue
             figure = sly.VideoFigure(
                 video_object, label.geometry, frame_index=unmatched_detections_frame
@@ -1040,8 +1040,9 @@ class Track:
             objects = objects.add(video_object)
             figures.append(figure)
 
-        objects_ids = self.api.video.object.append_bulk(self.video_id, objects)
-        self.api.video.figure.append_bulk(self.video_id, figures)
+        key_id_map = sly.KeyIdMap()
+        objects_ids = self.api.video.object.append_bulk(self.video_id, objects, key_id_map)
+        self.api.video.figure.append_bulk(self.video_id, figures, key_id_map)
         self.logger.info(
             "Detected new objects",
             extra={"frame": unmatched_detections_frame, "object_ids": objects_ids},
