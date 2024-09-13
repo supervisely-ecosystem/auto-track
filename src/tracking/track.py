@@ -982,7 +982,7 @@ class Track:
     ):
         unmatched_detections = []
         unmatched_detections_frame = None
-        threshhold = 0.8
+        threshhold = 0.5
         if not validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.DETECTOR):
             return
         detections: List[sly.Annotation] = inference.get_detections(
@@ -1009,7 +1009,18 @@ class Track:
                 prediction_boxes.append(united_box)
             detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
             cost_matrix = utils.iou_distance(detections_boxes, prediction_boxes)
-            _, unmatched_detections_indexes, _ = utils.linear_assignment(cost_matrix, threshhold)
+            sly.logger.debug("cost_matrix", extra={"cost_matrix": list(cost_matrix)})
+            matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
+                utils.linear_assignment(cost_matrix, threshhold)
+            )
+            sly.logger.debug(
+                "matches",
+                extra={
+                    "matches": list(matches),
+                    "unmatched_detections": unmatched_detections_indexes,
+                    "unmatched_predictions": unmatched_prediction_indexes,
+                },
+            )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [label for label in frame_detections.labels]
                 unmatched_detections_frame = frame_from + i
