@@ -31,7 +31,9 @@ def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
                 "Cache video is skipped because task_id is empty", extra={"geometry": geometry}
             )
             return
-        sly.logger.debug("Cache video request", extra={"task_id": task_id, "geometry": geometry})
+        sly.logger.debug(
+            "Cache video request", extra={"app_task_id": task_id, "geometry": geometry}
+        )
         r = api.app.send_request(task_id, "smart_cache", state, retries=1)
         sly.logger.debug("Cache video response", extra={"response": r, "geometry": geometry})
 
