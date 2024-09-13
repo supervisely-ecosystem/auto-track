@@ -337,3 +337,38 @@ def detect_movement_anomaly(
         return True
 
     return False
+
+
+def iou_distance(boxes1: List[sly.Rectangle], boxes2: List[sly.Rectangle]):
+    from cython_bbox import bbox_overlaps as bbox_ious  # pylint: disable=import-error
+
+    ious = np.zeros((len(boxes1), len(boxes2)), dtype=float)
+    if ious.size == 0:
+        return ious
+    boxes1 = np.array([[box.top, box.left, box.bottom, box.right] for box in boxes1])
+    boxes2 = np.array([[box.top, box.left, box.bottom, box.right] for box in boxes2])
+    ious = bbox_ious(
+        np.ascontiguousarray(boxes1, dtype=float), np.ascontiguousarray(boxes2, dtype=float)
+    )
+
+    return 1 - ious
+
+
+def linear_assignment(cost_matrix: np.ndarray, threshold=0.5):
+    import lap
+
+    if cost_matrix.size == 0:
+        return (
+            np.empty((0, 2), dtype=int),
+            tuple(range(cost_matrix.shape[0])),
+            tuple(range(cost_matrix.shape[1])),
+        )
+    matches, unmatched_a, unmatched_b = [], [], []
+    cost, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=threshold)
+    for ix, mx in enumerate(x):
+        if mx >= 0:
+            matches.append([ix, mx])
+    unmatched_a = np.where(x < 0)[0]
+    unmatched_b = np.where(y < 0)[0]
+    matches = np.asarray(matches)
+    return matches, unmatched_a, unmatched_b

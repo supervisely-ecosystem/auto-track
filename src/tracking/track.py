@@ -889,6 +889,7 @@ class Track:
                     frame_index=frame_from,
                     frames_count=frames_count,
                 )
+
         except Exception as e:
             cls, exc_str = utils.parse_exception(
                 e, {"geometry": geometry_type, "frames": [frame_from, frame_to]}
@@ -975,6 +976,79 @@ class Track:
                     ]
                     results[timeline_index][frame_index].append(predicted_figure)
         return results
+
+    def init_timelines_from_detections(
+        self, predictions: List[List[List[FigureInfo]]], frame_from: int, frame_to: int
+    ):
+        unmatched_detections = []
+        unmatched_detections_frame = None
+        threshhold = 0.8
+        if not validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.DETECTOR):
+            return
+        detections: List[sly.Annotation] = inference.get_detections(
+            self.api,
+            self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
+            self.video_id,
+            frame_from,
+            frame_to,
+        )
+        for i, frame_detections in enumerate(detections):
+            this_frame_predictions = [pred[i] for pred in predictions]
+            # match detections to predictions
+            prediction_boxes = []
+            for object_figures in this_frame_predictions:
+                boxes = [
+                    sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox()
+                    for figure in object_figures
+                ]
+                top = min([box.top for box in boxes])
+                left = min([box.left for box in boxes])
+                bottom = max([box.bottom for box in boxes])
+                right = max([box.right for box in boxes])
+                united_box = sly.Rectangle(top, left, bottom, right)
+                prediction_boxes.append(united_box)
+            detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
+            cost_matrix = utils.iou_distance(detections_boxes, prediction_boxes)
+            _, unmatched_detections_indexes, _ = utils.linear_assignment(cost_matrix, threshhold)
+            if len(unmatched_detections_indexes) > 0:
+                unmatched_detections = [label for label in frame_detections.labels]
+                unmatched_detections_frame = frame_from + i
+                break
+        if len(unmatched_detections) == 0:
+            return
+        objects = sly.VideoObjectCollection()
+        figures = []
+        project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
+        detected_obj_tm = project_meta.get_tag_meta("auto-detected-object")
+        if detected_obj_tm is None:
+            detected_obj_tm = sly.TagMeta("auto-detected-object", sly.TagValueType.NONE)
+            project_meta = project_meta.add_tag_meta(detected_obj_tm)
+            self.api.project.update_meta(self.project_id, project_meta)
+        for label in unmatched_detections:
+            object_class_name = label.obj_class.name
+            object_class: sly.ObjClass = project_meta.obj_classes.get(object_class_name, None)
+            if object_class is None:
+                continue
+            video_object = sly.VideoObject(
+                obj_class=object_class, tags=sly.VideoTagCollection([sly.VideoTag(detected_obj_tm)])
+            )
+            if not issubclass(object_class.geometry_type, [sly.AnyGeometry, type(label.geometry)]):
+                continue
+            figure = sly.VideoFigure(
+                video_object, label.geometry, frame_index=unmatched_detections_frame
+            )
+            objects = objects.add(video_object)
+            figures.append(figure)
+
+        objects_ids = self.api.video.object.append_bulk(self.video_id, objects)
+        self.api.video.figure.append_bulk(self.video_id, figures)
+        self.logger.info(
+            "Detected new objects",
+            extra={"frame": unmatched_detections_frame, "object_ids": objects_ids},
+        )
+        for object_id, figure in zip(objects_ids, figures):
+            timeline = Timeline(self, object_id, unmatched_detections_frame, frame_to)
+            self.timelines.append(timeline)
 
     # Upload
     def _get_figures_from_predictions(
@@ -1239,6 +1313,8 @@ class Track:
                     ],
                 },
             )
+
+            self.init_timelines_from_detections(batch_predictions, frame_from, frame_to)
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(

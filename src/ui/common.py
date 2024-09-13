@@ -1,5 +1,5 @@
 import supervisely as sly
-from supervisely.app.widgets import Empty
+from supervisely.app.widgets import Empty, Card
 
 import src.globals as g
 from .classes import DeployAppParameters, DeployAppByGeometry, GeometryCard
@@ -44,6 +44,14 @@ GEOMETRIES = (
                 "annotation will be predicted using NN models selected in the previous steps."
             ),
             "geometries": [g.GEOMETRY_NAME.SMARTTOOL],
+        },
+    ),
+    (
+        g.GEOMETRY_NAME.DETECTOR,
+        {
+            "title": "Detector",
+            "description": "Select NN model for detection",
+            "geometries": [g.GEOMETRY_NAME.DETECTOR],
         },
     ),
 )
