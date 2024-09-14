@@ -58,9 +58,14 @@ class Tracklet:
         self.start_frame = start_frame
         self.end_frame = end_frame
         self.last_tracked = (start_frame, figures)
-        self.area_hist = {}
-        self.center_hist = {}
-        self.bboxes_hist = {}
+        self.area_hist = {start_frame: sum([utils.get_figure_area(figure) for figure in figures])}
+        self.center_hist = {start_frame: utils.get_figures_center(figures=figures)}
+        self.bboxes_hist = {
+            start_frame: [
+                sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox()
+                for figure in figures
+            ]
+        }
         self.mean = None
         self.covariance = np.eye(4)
         self.covariance[0, 0] = self.covariance[1, 1] = 10.0
@@ -992,30 +997,19 @@ class Track:
             self.api,
             self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
             self.video_id,
-            frame_from + 1,
+            frame_from,
             frame_to,
         )
         for i, frame_detections in enumerate(detections):
+            frame_index = frame_from + i
             this_frame_predictions = []
             for timeline in self.timelines:
                 for tracklet in timeline.tracklets:
-                    if tracklet.start_frame <= frame_from + i <= tracklet.end_frame:
+                    if tracklet.start_frame <= frame_index <= tracklet.end_frame:
                         this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_from + i, []))
-            # match detections to predictions
-            prediction_boxes = []
-            for object_figures in this_frame_predictions:
-                boxes = [
-                    sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox()
-                    for figure in object_figures
-                ]
-                top = min([box.top for box in boxes])
-                left = min([box.left for box in boxes])
-                bottom = max([box.bottom for box in boxes])
-                right = max([box.right for box in boxes])
-                united_box = sly.Rectangle(top, left, bottom, right)
-                prediction_boxes.append(united_box)
+            # match detections to predictions            
             detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
-            cost_matrix = utils.iou_distance(detections_boxes, prediction_boxes)
+            cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
             sly.logger.debug("cost_matrix", extra={"cost_matrix": list(cost_matrix)})
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
                 utils.linear_assignment(cost_matrix, threshhold)
@@ -1030,7 +1024,7 @@ class Track:
             )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [label for label in frame_detections.labels]
-                unmatched_detections_frame = frame_from + i
+                unmatched_detections_frame = frame_index
                 break
         if len(unmatched_detections) == 0:
             return
