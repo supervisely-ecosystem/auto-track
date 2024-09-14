@@ -1007,7 +1007,7 @@ class Track:
                 for tracklet in timeline.tracklets:
                     if tracklet.start_frame <= frame_index <= tracklet.end_frame:
                         this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_from + i, []))
-            # match detections to predictions            
+            # match detections to predictions
             detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
             sly.logger.debug("cost_matrix", extra={"cost_matrix": list(cost_matrix)})
@@ -1060,7 +1060,12 @@ class Track:
             extra={"frame": unmatched_detections_frame, "object_ids": objects_ids},
         )
         for object_id, figure in zip(objects_ids, figures):
-            timeline = Timeline(self, object_id, unmatched_detections_frame, frame_to)
+            timeline = Timeline(
+                self,
+                object_id,
+                unmatched_detections_frame,
+                self.get_frame_range(unmatched_detections_frame)[1],
+            )
             self.timelines.append(timeline)
 
     # Upload
