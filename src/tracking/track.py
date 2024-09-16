@@ -1010,14 +1010,12 @@ class Track:
             # match detections to predictions
             detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
-            sly.logger.debug("cost_matrix", extra={"cost_matrix": list(cost_matrix)})
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
                 utils.linear_assignment(cost_matrix, threshhold)
             )
             sly.logger.debug(
                 "matches",
                 extra={
-                    "matches": list(matches),
                     "unmatched_detections": unmatched_detections_indexes,
                     "unmatched_predictions": unmatched_prediction_indexes,
                 },
