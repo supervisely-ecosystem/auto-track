@@ -505,7 +505,10 @@ class Progress:
             self.total,
             self.frame_range[0] + 1,
             self.frame_range[1],
-            extra=self.track.logger_extra,
+            extra={
+                **self.track.logger_extra,
+                "timelines": [tl.log_data() for tl in self.track.timelines],
+            },
         )
 
         global_stop_indicator = self.track.api.video.notify_progress(
@@ -585,11 +588,6 @@ class Track:
         self.kalman_filter = utils.KalmanFilter()
 
         self.logger = self.api.logger
-        self.logger_extra = {
-            "video_id": self.video_id,
-            "track_id": self.track_id,
-            "object_ids": self.object_ids,
-        }
 
         self.batch_size = 16
         self.updates: List[Update] = []
@@ -622,6 +620,14 @@ class Track:
         self.progress = Progress(self)
         self.progress.frame_range = self.frame_ranges[0]
         self.refresh_progress()
+
+    @property
+    def logger_extra(self):
+        return {
+            "video_id": self.video_id,
+            "track_id": self.track_id,
+            "object_ids": [tl.object_id for tl in self.timelines],
+        }
 
     def _init_timelines(self):
         # Get common data for all timelines to avoid multiple requests
@@ -697,7 +703,6 @@ class Track:
             current += timeline.get_progress_current()
         self.progress.total = total
         self.progress.current = current
-        self.log_timelines()
 
     def get_batch(self, batch_size: int = None):
         if batch_size is None:
@@ -733,16 +738,6 @@ class Track:
             frame_to,
             [tl_batch[2] for tl_batch in tl_batches],  # timelines figures
             [tl_batch[3] for tl_batch in tl_batches],  # timelines indexes
-        )
-
-    def log_timelines(self):
-        """log timelines data"""
-        self.logger.debug(
-            "Timelines",
-            extra={
-                "timelines": [timeline.log_data() for timeline in self.timelines],
-                **self.logger_extra,
-            },
         )
 
     # Updates
@@ -787,12 +782,13 @@ class Track:
         pending_updates = self.pop_updates()
         if len(pending_updates) == 0:
             return
-        self.logger.info("Apply updates", extra={"updates": pending_updates})
+        self.logger.info(
+            "Apply updates", extra={"updates": pending_updates, "track_info": self.logger_extra}
+        )
         for update in pending_updates:
             self.apply_update(update)
-            self.refresh_progress()
-            self.progress.notify()
-            self.log_timelines()
+        self.refresh_progress()
+        self.progress.notify()
 
     def wait_for_updates(self, timeout: int = 30):
         """wait for updates"""
@@ -812,7 +808,7 @@ class Track:
                     extra={**self.logger_extra},
                 )
             if self.global_stop_indicator:
-                self.logger.info("Tracking stopped by user.")
+                self.logger.info("Tracking stopped by user.", extra={**self.logger_extra})
                 self.progress.notify(stop=True)
                 return False
         return False
@@ -831,7 +827,11 @@ class Track:
             )["transactionId"]
             return transaction_id
         except Exception:
-            self.logger.error("Unable to reserve tokens for predictions", exc_info=True)
+            self.logger.error(
+                "Unable to reserve tokens for predictions",
+                exc_info=True,
+                extra={"track_info": self.logger_extra},
+            )
             raise RuntimeError("Unable to reserve tokens for predictions") from None
 
     def withdraw_billing(self, transaction_id: str, items_count: int):
@@ -845,7 +845,11 @@ class Track:
                     cloud_action_id=self.cloud_action_id,
                 )
             except Exception:
-                self.logger.error("Unable to withdraw tokens for predictions", exc_info=True)
+                self.logger.error(
+                    "Unable to withdraw tokens for predictions",
+                    exc_info=True,
+                    extra={"track_info": self.logger_extra},
+                )
                 raise RuntimeError("Unable to withdraw tokens for predictions") from None
 
     # Predictions
@@ -862,7 +866,7 @@ class Track:
         First list is for frames, second list is for predicted figures on the frame.
         run_geometry(*args)[i][j] is the prediction of j-th figure on the i-th frame.
         """
-        self.logger.debug("Tracking geometry type %s", geometry_type)
+        self.logger.debug("Tracking geometry type %s", geometry_type, extra=self.logger_extra)
         validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
 
         frames_count = frame_to - frame_from
@@ -1013,13 +1017,6 @@ class Track:
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
                 utils.linear_assignment(cost_matrix, threshhold)
             )
-            sly.logger.debug(
-                "matches",
-                extra={
-                    "unmatched_detections": unmatched_detections_indexes,
-                    "unmatched_predictions": unmatched_prediction_indexes,
-                },
-            )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [label for label in frame_detections.labels]
                 unmatched_detections_frame = frame_index
@@ -1055,7 +1052,11 @@ class Track:
         self.api.video.figure.append_bulk(self.video_id, figures, key_id_map)
         self.logger.info(
             "Detected new objects",
-            extra={"frame": unmatched_detections_frame, "object_ids": objects_ids},
+            extra={
+                "frame": unmatched_detections_frame,
+                "object_ids": objects_ids,
+                "track_info": self.logger_extra,
+            },
         )
         for object_id, figure in zip(objects_ids, figures):
             timeline = Timeline(
@@ -1099,18 +1100,24 @@ class Track:
             self.api.video.figure.remove_batch([fig.id for fig in existing])
             return
         except Exception as e:
-            self.logger.warning("Unable to remove figures in batch", extra={"exception": str(e)})
+            self.logger.warning(
+                "Unable to remove figures in batch",
+                extra={"exception": str(e), "track_info": self.logger_extra},
+            )
         for fig in existing:
             try:
                 self.api.video.figure.remove(fig.id)
             except Exception as e:
-                self.logger.warning("Unable to remove figure", extra={"exception": str(e)})
+                self.logger.warning(
+                    "Unable to remove figure",
+                    extra={"exception": str(e), "track_info": self.logger_extra},
+                )
 
     def _safe_upload_figures(self, figures: List[FigureInfo]):
         try:
             return self._upload_figures(figures), []
         except Exception:
-            self.logger.warning("Unable to upload figures", exc_info=True)
+            self.logger.warning("Unable to upload figures", exc_info=True, extra=self.logger_extra)
         figures_by_object = {}
         for figure in figures:
             figures_by_object.setdefault(figure.object_id, []).append(figure)
@@ -1121,7 +1128,10 @@ class Track:
                 uploaded_figures.extend(self._upload_figures(object_figures))
             except Exception:
                 self.logger.warning(
-                    "Unable to upload figures for object %s", object_id, exc_info=True
+                    "Unable to upload figures for object %s",
+                    object_id,
+                    exc_info=True,
+                    extra=self.logger_extra,
                 )
                 bad_objects.append(object_id)
         return uploaded_figures, bad_objects
@@ -1255,7 +1265,7 @@ class Track:
         self.progress.notify()
         while True:  # Main loop
             if self.global_stop_indicator:
-                self.logger.info("Tracking stopped by user.")
+                self.logger.info("Tracking stopped by user.", extra=self.logger_extra)
                 self.progress.notify(stop=True)
                 return
 
@@ -1280,11 +1290,12 @@ class Track:
                 return
 
             self.logger.debug(
-                "Batch data",
+                "Iteration batch data",
                 extra={
                     "frame_from": frame_from,
                     "frame_to": frame_to,
                     "timelines": [self.timelines[i].log_data() for i in timelines_indexes],
+                    **self.logger_extra,
                 },
             )
 
@@ -1301,34 +1312,12 @@ class Track:
             )
             batch_predictions: List[List[List[FigureInfo]]]
 
-            self.logger.debug(
-                "Predictions before filtering",
-                extra={
-                    "timelines count": len(batch_predictions),
-                    "frame_predictions_counts": [len(tl) for tl in batch_predictions],
-                    "per_frame_predictions_counts": [
-                        len(frame) for tl in batch_predictions for frame in tl
-                    ],
-                },
-            )
-
             # filter disappearing figures
             for tl_index, timeline_predictions in enumerate(batch_predictions):
                 timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
                 batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
                     frame_from, frame_to, timeline_predictions
                 )
-
-            self.logger.debug(
-                "Predictions after filtering",
-                extra={
-                    "timelines count": len(batch_predictions),
-                    "frame_predictions_counts": [len(tl) for tl in batch_predictions],
-                    "per_frame_predictions_counts": [
-                        len(frame) for tl in batch_predictions for frame in tl
-                    ],
-                },
-            )
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
@@ -1342,7 +1331,11 @@ class Track:
             update_timelines_time, _ = utils.time_it(
                 self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
             )
-            self.init_timelines_from_detections(frame_from, frame_to)
+
+            # update from detections
+            update_from_detections_time, _ = utils.time_it(
+                self.init_timelines_from_detections, frame_from, frame_to
+            )
 
             frame_range = self.frame_ranges[0]
             for fr in self.frame_ranges[1:]:
@@ -1361,7 +1354,9 @@ class Track:
                     "get batch data": f"{get_batch_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
+                    "update from detections": f"{update_from_detections_time:.6f} sec",
                     "update timelines": f"{update_timelines_time:.6f} sec",
+                    **self.logger_extra,
                 },
             )
 
@@ -1385,6 +1380,15 @@ class Track:
         return None
 
     def object_changed(self, object_ids: List[int], frame_index: int, frames_count: int):
+        self.logger.info(
+            "Figure changed",
+            extra={
+                "object_ids": object_ids,
+                "frame_index": frame_index,
+                "frames_count": frames_count,
+                "track_info": self.logger_extra,
+            },
+        )
         for obj_id in object_ids:
             self.prevent_object_upload(obj_id, (frame_index, self.video_info.frames_count))
         self.object_ids = list(set(self.object_ids + object_ids))
@@ -1413,7 +1417,14 @@ class Track:
         Update track if it was extended
         Should extends timelines and download new figures
         """
-
+        self.logger.info(
+            "Continue tracking.",
+            extra={
+                "frame_index": frame_index,
+                "frames_count": frames_count,
+                "track_info": self.logger_extra,
+            },
+        )
         frames_count = min(self.video_info.frames_count - frame_index, frames_count)
         for frame_range in self.frame_ranges:
             if frame_range[0] <= frame_index <= frame_range[1]:
@@ -1430,6 +1441,15 @@ class Track:
         It means that objects should not be tracked on the frames where they were removed
         Should update timelines and remove added figures
         """
+        self.logger.info(
+            "Object removed",
+            extra={
+                "object_id": object_id,
+                "frame_index": frame_index,
+                "frames_count": frames_count,
+                "track_info": self.logger_extra,
+            },
+        )
         self.prevent_object_upload(object_id, (frame_index, self.video_info.frames_count))
         for timeline in self.timelines:
             if timeline.object_id == object_id:
@@ -1441,6 +1461,14 @@ class Track:
         It means that objects should be tracked on the frames where they were removed
         Should update timelines and set last tracked figures to one frame before the removal
         """
+        self.logger.info(
+            "No object tag removed",
+            extra={
+                "object_id": object_id,
+                "frame_index": frame_index,
+                "track_info": self.logger_extra,
+            },
+        )
         frame_range = self.get_frame_range(frame_index)
         if frame_range is None:
             frame_range = self.frame_ranges[0]
@@ -1450,6 +1478,14 @@ class Track:
 
     def manual_figure_removed(self, object_id: int, frame_index: int):
         """Update track if figures annotated by user were removed"""
+        self.logger.info(
+            "Manual figure removed",
+            extra={
+                "object_id": object_id,
+                "frame_index": frame_index,
+                "track_info": self.logger_extra,
+            },
+        )
         frame_range = None
         for fr in self.frame_ranges:
             if fr[0] <= frame_index <= fr[1]:
@@ -1486,7 +1522,6 @@ def track(
             object_id = figure["objectId"]
             frame_range = figure["frames"]
             delete_data.append((object_id, frame_range))
-        api.logger.info("Delete figures", extra={"delete_data": delete_data})
         for object_id, frame_range in delete_data:
             frame_index = frame_range[0]
             frames_count = frame_range[1] - frame_range[0] + 1
@@ -1510,7 +1545,6 @@ def track(
         frames_count = context["frames"]
         cur_track = g.current_tracks.get(track_id, None)
         if cur_track is not None:
-            api.logger.info("Continue tracking.", extra={"track_id": track_id})
             cur_track.append_update(
                 Update(
                     [],
@@ -1586,7 +1620,6 @@ def track(
     with g.tracks_lock:
         cur_track: Track = g.current_tracks.get(track_id, None)
         if cur_track is not None:
-            api.logger.info("Figure changed. Update tracking", extra={"track_id": track_id})
             cur_track.append_update(Update(object_ids, frame_index, frames_count, update_type))
             cur_track.disappear_params = disappear_params
             return
