@@ -194,7 +194,7 @@ def parse_exception(exc: Exception, extra: Dict = None) -> Tuple[Type, str]:
                 return exc.__class__, msg
             return exc.__class__, str(exc_repsponse)
         except Exception:
-            return str(exc)
+            return exc.__class__, str(exc)
     return exc.__class__, str(exc)
 
 
