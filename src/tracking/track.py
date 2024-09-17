@@ -738,10 +738,13 @@ class Track:
             return None, None, None, None  # all timelines are finished
         # Find lowest starting frame
         frame_from = min([batch[0] for batch in tl_batches])
+        # Find lowest ending frame
+        frame_to = min(
+            [*[batch[1] for batch in tl_batches],
+            *[batch[0] for batch in tl_batches if batch[0] > frame_from]]
+        )
         # Leave only batches starting with the lowest starting frame
         tl_batches = [tl_batch for tl_batch in tl_batches if tl_batch[0] == frame_from]
-        # Find lowest ending frame
-        frame_to = min([batch[1] for batch in tl_batches])
         return (
             frame_from,
             frame_to,
