@@ -460,15 +460,10 @@ def predict_smarttool(
 
 def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to):
     if "task_id" in nn_settings:
-        detections = []
         session = sly.nn.inference.Session(
             api, nn_settings["task_id"], inference_settings={"conf": 0.7}
         )
-        for frame_ann in session.inference_video_id_async(
-            video_id, frame_from, frame_to - frame_from
-        ):
-            frame_ann: sly.Annotation
-            detections.append(frame_ann)
+        detections = session.inference_video_id(video_id, frame_from, frame_to - frame_from)
         return detections
 
     elif "url" in nn_settings:

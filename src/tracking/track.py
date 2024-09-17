@@ -710,6 +710,15 @@ class Track:
         tl_batches = [
             [*tl.get_batch(batch_size), tl_index] for tl_index, tl in enumerate(self.timelines)
         ]  # frame_from, frame_to, figures, tl_index
+        # temp log
+        self.logger.debug(
+            "Batch data before filtering",
+            extra={
+                **self.logger_extra,
+                "tl_batches": tl_batches,
+                "timelines": [tl.log_data() for tl in self.timelines],
+            },
+        )
         tl_batches = [
             tl_batch for tl_batch in tl_batches if tl_batch[0] is not None and tl_batch[2]
         ]
@@ -1010,7 +1019,7 @@ class Track:
             for timeline in self.timelines:
                 for tracklet in timeline.tracklets:
                     if tracklet.start_frame <= frame_index <= tracklet.end_frame:
-                        this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_from + i, []))
+                        this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_index, []))
             # match detections to predictions
             detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
@@ -1434,6 +1443,16 @@ class Track:
         self.merge_frame_ranges()
         for timeline in self.timelines:
             timeline.continue_timeline(frame_index, frames_count)
+        # temp log
+        self.logger.debug(
+            "After continue tracking",
+            extra={
+                "timelines": [
+                    {**tl.log_data(), "tracklets": [t.log_data() for t in tl.tracklets]}
+                    for tl in self.timelines
+                ]
+            },
+        )
 
     def object_removed(self, object_id: int, frame_index: int, frames_count: int):
         """
