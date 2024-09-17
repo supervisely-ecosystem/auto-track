@@ -463,7 +463,7 @@ def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, f
         session = sly.nn.inference.Session(
             api, nn_settings["task_id"], inference_settings={"conf": conf}
         )
-        detections = session.inference_video_id(video_id, frame_from, frame_to - frame_from)
+        detections = session.inference_video_id(video_id, frame_from, frame_to - frame_from + 1)
         return detections
 
     elif "url" in nn_settings:

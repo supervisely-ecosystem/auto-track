@@ -1030,7 +1030,7 @@ class Track:
             )
             for i, frame_detections in enumerate(detections):
                 self.detections_cache[x_from + i] = frame_detections
-        return [self.detections_cache.get(x, None) for x in range(frame_from, frame_to + 1)]
+        return [self.detections_cache[x] for x in range(frame_from, frame_to + 1)]
 
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections = []
