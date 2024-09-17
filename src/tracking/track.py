@@ -1027,7 +1027,9 @@ class Track:
                 utils.linear_assignment(cost_matrix, threshhold)
             )
             if len(unmatched_detections_indexes) > 0:
-                unmatched_detections = [label for label in frame_detections.labels]
+                unmatched_detections = [
+                    frame_detections.labels[idx] for idx in unmatched_detections_indexes
+                ]
                 unmatched_detections_frame = frame_index
                 break
         if len(unmatched_detections) == 0:
