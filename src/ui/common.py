@@ -52,6 +52,23 @@ GEOMETRIES = (
             "title": "Detector",
             "description": "Select NN model for detection",
             "geometries": [g.GEOMETRY_NAME.DETECTOR],
+            "extra_params": {
+                "enabled": {
+                    "type": "bool",
+                    "title": "Enabled",
+                    "description": "If enabled, detector NN will be used to detect objects and track them",
+                    "default": False,
+                },
+                "confidence": {
+                    "type": "float",
+                    "title": "Confidence threshold",
+                    "description": "Confidence threshold for detector",
+                    "default": 0.7,
+                    "min": 0,
+                    "max": 1,
+                    "step": 0.01,
+                },
+            },
         },
     ),
 )
@@ -67,6 +84,7 @@ GEOMETRY_CARDS = {
         title=details["title"],
         deploy_app=DEPLOY_APP_BY_GEOMETRY[geometry_name],
         description=details["description"],
+        extra_params=details.get("extra_params", {}),
     )
     for geometry_name, details in GEOMETRIES
 }

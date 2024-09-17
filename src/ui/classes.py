@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, Union
 
 from supervisely.app.widgets import (
     Container,
@@ -16,6 +16,7 @@ from supervisely.app.widgets import (
     Flexbox,
     Text,
 )
+from supervisely import logger
 
 import src.globals as g
 
@@ -209,12 +210,18 @@ class DeployedAppInfo:
 
 class GeometryCard:
     def __init__(
-        self, geometries: List[str], title: str, deploy_app: DeployAppByGeometry, description=""
+        self,
+        geometries: List[str],
+        title: str,
+        deploy_app: DeployAppByGeometry,
+        description="",
+        extra_params={},
     ):
         self.geometries = geometries
         self.title = title
         self.description = description
         self.deploy_app = deploy_app
+        self.extra_params = extra_params
         self.card = None
         self.create_widgets()
 
@@ -273,6 +280,32 @@ class GeometryCard:
         # to update selectors when app is deployed
         self.deploy_app.set_on_deploy_callback(self.update_nn)
 
+        extra_params_widgets = {}
+        for name, details in self.extra_params.items():
+            if details["type"] == "bool":
+                widget = Checkbox(content=details["title"], checked=details["default"])
+                widget_field = Field(
+                    widget, title=details["title"], description=details["description"]
+                )
+                extra_params_widgets[name] = (widget, widget_field)
+            elif details["type"] == "float":
+                widget = InputNumber(
+                    min=details.get("min", 0),
+                    max=details.get("max", 1),
+                    step=details.get("step", 0.01),
+                    value=details["default"],
+                )
+                widget_field = Field(
+                    widget, title=details["title"], description=details["description"]
+                )
+                extra_params_widgets[name] = (widget, widget_field)
+
+        self.extra_params: Dict[str, Union[Checkbox, InputNumber]] = {
+            name: widget for name, (widget, _) in extra_params_widgets.items()
+        }
+        for name, widget in self.extra_params.items():
+            widget.value_changed(lambda *args: logger.debug("Extra parameters changed"))
+
         self.card = Card(
             title=self.title,
             description=self.description,
@@ -284,6 +317,7 @@ class GeometryCard:
                             select_nn_one_of,
                             Flexbox(widgets=[self.deploy_app_button, refresh_nn_app_button], gap=0),
                             deploy_app_dialog,
+                            *[x[1] for x in extra_params_widgets.values()],
                         ],
                     ),
                     Empty(),
@@ -297,6 +331,9 @@ class GeometryCard:
 
     def get_selectors(self) -> Tuple[Select, Select]:
         return self.select_nn, self.select_nn_app
+
+    def get_extra_params(self) -> Dict[str, Union[Checkbox, InputNumber]]:
+        return self.extra_params
 
     def update_nn(self):
         nns = self.deploy_app.get_neural_networks()

@@ -1007,6 +1007,13 @@ class Track:
         return results
 
     def get_detections(self, frame_from: int, frame_to: int):
+        if not validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.DETECTOR):
+            return []
+        settings = self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("extra_params", {})
+        if not settings.get("enabled", False):
+            return []
+        conf = settings.get("confidence", 0.5)
+
         x_from = None
         for x in range(frame_from, frame_to + 1):
             if x not in self.detections_cache:
@@ -1019,6 +1026,7 @@ class Track:
                 self.video_id,
                 x_from,
                 frame_to,
+                conf=conf,
             )
             for i, frame_detections in enumerate(detections):
                 self.detections_cache[x_from + i] = frame_detections
@@ -1027,9 +1035,8 @@ class Track:
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections = []
         unmatched_detections_frame = None
-        threshhold = 0.5
-        if not validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.DETECTOR):
-            return
+        threshhold = 0.5  # Maybe add to UI
+
         detections: List[sly.Annotation] = self.get_detections(
             frame_from,
             frame_to,

@@ -8,7 +8,7 @@ from supervisely.app.widgets import (
     Switch,
     OneOf,
     Empty,
-    Button,
+    Checkbox,
 )
 from supervisely import logger
 
@@ -159,6 +159,7 @@ def get_nn_settings():
     for geometry_card in GEOMETRY_CARDS.values():
         selector, app_selector = geometry_card.get_selectors()
         selector_value = selector.get_value()
+        extra_params = geometry_card.get_extra_params()
         for geometry_name in geometry_card.geometries:
             if selector_value == "url":
                 url = geometry_card.nn_url_input.get_value()
@@ -166,6 +167,10 @@ def get_nn_settings():
             else:
                 session = app_selector.get_value()
                 settings[geometry_name] = {"task_id": session}
+            settings[geometry_name]["extra_params"] = {
+                name: widget.is_checked() if isinstance(widget, Checkbox) else widget.get_value()
+                for name, widget in extra_params.items()
+            }
 
     return settings
 
