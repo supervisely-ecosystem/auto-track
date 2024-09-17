@@ -597,6 +597,7 @@ class Track:
         self._upload_queue = queue.Queue()
         self._upload_thread = None
         self.prevent_upload_objects = []
+        self.detections_cache = {}
 
         self.no_object_tag_ids = [
             t.id
@@ -740,8 +741,10 @@ class Track:
         frame_from = min([batch[0] for batch in tl_batches])
         # Find lowest ending frame
         frame_to = min(
-            [*[batch[1] for batch in tl_batches],
-            *[batch[0] for batch in tl_batches if batch[0] > frame_from]]
+            [
+                *[batch[1] for batch in tl_batches],
+                *[batch[0] for batch in tl_batches if batch[0] > frame_from],
+            ]
         )
         # Leave only batches starting with the lowest starting frame
         tl_batches = [tl_batch for tl_batch in tl_batches if tl_batch[0] == frame_from]
@@ -1003,16 +1006,31 @@ class Track:
                     results[timeline_index][frame_index].append(predicted_figure)
         return results
 
+    def get_detections(self, frame_from: int, frame_to: int):
+        x_from = None
+        for x in range(frame_from, frame_to + 1):
+            if x not in self.detections_cache:
+                x_from = x
+                break
+        if x_from is not None:
+            detections: List[sly.Annotation] = inference.get_detections(
+                self.api,
+                self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
+                self.video_id,
+                x_from,
+                frame_to,
+            )
+            for i, frame_detections in enumerate(detections):
+                self.detections_cache[x_from + i] = frame_detections
+        return [self.detections_cache.get(x, None) for x in range(frame_from, frame_to + 1)]
+
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections = []
         unmatched_detections_frame = None
         threshhold = 0.5
         if not validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.DETECTOR):
             return
-        detections: List[sly.Annotation] = inference.get_detections(
-            self.api,
-            self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
-            self.video_id,
+        detections: List[sly.Annotation] = self.get_detections(
             frame_from,
             frame_to,
         )
