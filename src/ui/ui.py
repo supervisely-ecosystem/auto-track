@@ -27,7 +27,7 @@ select_nn_settings_description_text = Text(
     ),
     font_size=15,
 )
-disappear_threshold = InputNumber(min=0.05, max=0.95, step=0.05, value=0.5)
+disappear_threshold = InputNumber(min=0.05, max=0.95, step=0.05, value=0.2)
 disappear_threshold_field = Field(
     disappear_threshold,
     "Disappear threshold",
