@@ -711,15 +711,6 @@ class Track:
         tl_batches = [
             [*tl.get_batch(batch_size), tl_index] for tl_index, tl in enumerate(self.timelines)
         ]  # frame_from, frame_to, figures, tl_index
-        # temp log
-        self.logger.debug(
-            "Batch data before filtering",
-            extra={
-                **self.logger_extra,
-                "tl_batches": tl_batches,
-                "timelines": [tl.log_data() for tl in self.timelines],
-            },
-        )
         tl_batches = [
             tl_batch for tl_batch in tl_batches if tl_batch[0] is not None and tl_batch[2]
         ]
@@ -1474,16 +1465,6 @@ class Track:
         self.merge_frame_ranges()
         for timeline in self.timelines:
             timeline.continue_timeline(frame_index, frames_count)
-        # temp log
-        self.logger.debug(
-            "After continue tracking",
-            extra={
-                "timelines": [
-                    {**tl.log_data(), "tracklets": [t.log_data() for t in tl.tracklets]}
-                    for tl in self.timelines
-                ]
-            },
-        )
 
     def object_removed(self, object_id: int, frame_index: int, frames_count: int):
         """
