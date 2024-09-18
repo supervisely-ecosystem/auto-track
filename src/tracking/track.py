@@ -1462,6 +1462,7 @@ class Track:
                 "frame_index": frame_index,
                 "frames_count": frames_count,
                 "track_info": self.logger_extra,
+                "frame_ranges": self.frame_ranges,
             },
         )
         frames_count = min(self.video_info.frames_count - frame_index, frames_count)
