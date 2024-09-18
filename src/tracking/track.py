@@ -109,12 +109,18 @@ class Tracklet:
         if remove_added_figures:
             self.clear(from_frame=frame_index, to_frame=self.end_frame)
         self.end_frame = frame_index - 1
+        to_del = []
         for frame_index in self.area_hist:
             if frame_index >= frame_index:
-                del self.area_hist[frame_index]
+                to_del.append(frame_index)
+        for frame_index in to_del:
+            del self.area_hist[frame_index]
+        to_del = []
         for frame_index in self.center_hist:
             if frame_index >= frame_index:
-                del self.center_hist[frame_index]
+                to_del.append(frame_index)
+        for frame_index in to_del:
+            del self.center_hist[frame_index]
 
     def clear(self, from_frame: int = None, to_frame: int = None):
         if from_frame is None:
