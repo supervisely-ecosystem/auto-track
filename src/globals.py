@@ -40,6 +40,10 @@ class ENV:
         return os.getenv("CLICKSEG_URL", "http://clickseg")
 
     @classmethod
+    def yolov8_url(cls) -> str:
+        return os.getenv("YOLOV8_URL", "http://yolov8")
+
+    @classmethod
     def is_cloud(cls) -> bool:
         if hasattr(sly.env, "sly_cloud_server_address"):
             sly.env.sly_cloud_server_address(raise_not_found=False) is not None
@@ -54,6 +58,7 @@ class GEOMETRY_NAME:
     BITMAP = sly.Bitmap.geometry_name()
     GRAPH_NODES = sly.GraphNodes.geometry_name()
     SMARTTOOL = "smarttool"
+    DETECTOR = "detector"
 
 
 class AppParameterDescription:
@@ -167,9 +172,17 @@ class NN:
         cloud_url=ENV.clickseg_url(),
         params={},
     )
+    YOLOV8 = NeuralNetwork(
+        name="yolov8",
+        module_id=api.app.get_ecosystem_module_id("supervisely-ecosystem/yolov8/serve"),
+        title="YOLOv8",
+        description="",
+        cloud_url=ENV.yolov8_url(),
+        params={},
+    )
 
 
-nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG]
+nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8]
 geometry_nn = {
     GEOMETRY_NAME.RECTANGLE: [NN.MIX_FORMER],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
@@ -178,6 +191,7 @@ geometry_nn = {
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
     GEOMETRY_NAME.BITMAP: [NN.XMEM],
     GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG],
+    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8],
 }
 
 
