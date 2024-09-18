@@ -1,6 +1,8 @@
 FROM supervisely/base-py-sdk:6.73.61
 
 RUN pip install git+https://github.com/supervisely/supervisely.git@gpu-cloud
+RUN pip install lap
+RUN pip install cython_bbox
 
 WORKDIR /app
 COPY src /app/src
