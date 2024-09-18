@@ -998,7 +998,9 @@ class Track:
         return results
 
     def get_detections(self, frame_from: int, frame_to: int):
-        if not validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.DETECTOR):
+        if not validate_nn_settings_for_geometry(
+            self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False
+        ):
             return []
         settings = self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("extra_params", {})
         if not settings.get("enabled", False):
