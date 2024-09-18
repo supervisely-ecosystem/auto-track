@@ -458,10 +458,10 @@ def predict_smarttool(
     return results
 
 
-def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to, conf=0.7):
+def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to):
     if "task_id" in nn_settings:
         session = sly.nn.inference.Session(
-            api, nn_settings["task_id"], inference_settings={"conf": conf}
+            api, nn_settings["task_id"]
         )
         detections = session.inference_video_id(video_id, frame_from, frame_to - frame_from + 1)
         return detections

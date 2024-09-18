@@ -599,7 +599,6 @@ class Track:
         self.updates: List[Update] = []
         self.updates_pending = False
         self._lock = threading.Lock()
-        self._lock = threading.Lock()
         self._upload_queue = queue.Queue()
         self._upload_thread = None
         self.prevent_upload_objects = []
@@ -1003,19 +1002,25 @@ class Track:
                     results[timeline_index][frame_index].append(predicted_figure)
         return results
 
-    def get_detections(self, frame_from: int, frame_to: int):
-        if not validate_nn_settings_for_geometry(
+    def is_detection_enabled(self):
+        valid = validate_nn_settings_for_geometry(
             self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False
-        ):
-            return []
-        settings = self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("extra_params", {})
-        if not settings.get("enabled", False):
-            return []
-        conf = settings.get("confidence", 0.5)
+        )
+        enabled = (
+            self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
+            .get("extra_params", {})
+            .get("enabled", False)
+        )
+        return enabled and valid
+
+    def get_detections(self, frame_from: int, frame_to: int):
+        if not self.is_detection_enabled():
+            return False
+        # conf = self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("extra_params", {}).get("confidence", 0.5)
 
         x_from = None
         for x in range(frame_from, frame_to + 1):
-            if x not in self.detections_cache or self.detections_cache[x][1] != conf:
+            if x not in self.detections_cache:
                 x_from = x
                 break
         if x_from is not None:
@@ -1025,11 +1030,10 @@ class Track:
                 self.video_id,
                 x_from,
                 frame_to,
-                conf=conf,
             )
             for i, frame_detections in enumerate(detections):
-                self.detections_cache[x_from + i] = (frame_detections, conf)
-        return [self.detections_cache[x][0] for x in range(frame_from, frame_to + 1)]
+                self.detections_cache[x_from + i] = frame_detections
+        return [self.detections_cache[x] for x in range(frame_from, frame_to + 1)]
 
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections = []
@@ -1311,14 +1315,23 @@ class Track:
 
             self.apply_updates()
 
+            # init timelines from detections on first frame of the batch
+            if self.is_detection_enabled():
+                # billing reserve
+                transaction_id = self.reserve_billing(1)
+                with self._lock:
+                    frame_from, frame_to, timelines_figures, timelines_indexes = self.get_batch()
+                if not (frame_from is None or frame_to - frame_from == 0):
+                    self.init_timelines_from_detections(frame_from, frame_from)
+                self.withdraw_billing(transaction_id, 1)
+
             wait_update_time = TinyTimer()
             with self._lock:
                 # Get batch data
                 self.updates_pending = False
-                get_batch_time, (frame_from, frame_to, timelines_figures, timelines_indexes) = (
-                    utils.time_it(self.get_batch)
-                )
-            wait_update_time = wait_update_time.get_sec() - get_batch_time
+                frame_from, frame_to, timelines_figures, timelines_indexes = self.get_batch()
+
+            wait_update_time = wait_update_time.get_sec()
 
             if frame_from is None or frame_to - frame_from == 0:
                 if self._upload_thread is not None and self._upload_thread.is_alive():
@@ -1336,6 +1349,10 @@ class Track:
                     **self.logger_extra,
                 },
             )
+
+            # load detections in parallel
+            if self.is_detection_enabled():
+                threading.Thread(target=self.get_detections, args=(frame_from, frame_to)).start()
 
             # billing reserve
             frames_count = frame_to - frame_from
@@ -1389,7 +1406,6 @@ class Track:
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
                     "wait update": f"{wait_update_time:.6f} sec",
-                    "get batch data": f"{get_batch_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
                     "update from detections": f"{update_from_detections_time:.6f} sec",
