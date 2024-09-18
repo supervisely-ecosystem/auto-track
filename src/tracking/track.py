@@ -1603,7 +1603,7 @@ def track(
                     update_type,
                 )
             )
-            cur_track.apply_updates()
+            # cur_track.apply_updates()
             cur_track.disappear_params = disappear_params
             return
         else:
