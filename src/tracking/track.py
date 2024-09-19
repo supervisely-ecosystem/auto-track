@@ -1097,6 +1097,7 @@ class Track:
             "Detected new objects",
             extra={
                 "frame": unmatched_detections_frame,
+                "unmatched_detections": unmatched_detections,
                 "object_ids": objects_ids,
                 "track_info": self.logger_extra,
             },
