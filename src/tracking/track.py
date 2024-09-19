@@ -1337,10 +1337,14 @@ class Track:
 
             total_tm = TinyTimer()
 
-            self.apply_updates()
+            # Apply updates
+            apply_updates_time, _ = utils.time_it(self.apply_updates)
+
+            update_meta_time = TinyTimer()
             self.project_meta = sly.ProjectMeta.from_json(
                 self.api.project.get_meta(self.project_id)
             )
+            update_meta_time = update_meta_time.get_sec()
 
             # init timelines from detections on first frame of the batch
             initial_detection_time = TinyTimer()
@@ -1363,10 +1367,10 @@ class Track:
             wait_update_time = wait_update_time.get_sec()
 
             if frame_from is None or frame_to - frame_from == 0:
-                if self._upload_thread is not None and self._upload_thread.is_alive():
-                    self._upload_thread.join()
                 if self.wait_for_updates():
                     continue
+                if self._upload_thread is not None and self._upload_thread.is_alive():
+                    self._upload_thread.join()
                 return
 
             self.logger.debug(
@@ -1397,11 +1401,13 @@ class Track:
             batch_predictions: List[List[List[FigureInfo]]]
 
             # filter disappearing figures
+            filter_disappeared_time = TinyTimer()
             for tl_index, timeline_predictions in enumerate(batch_predictions):
                 timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
                 batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
                     frame_from, frame_to, timeline_predictions
                 )
+            filter_disappeared_time = filter_disappeared_time.get_sec()
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
@@ -1423,6 +1429,8 @@ class Track:
                     self.init_timelines_from_detections, frame_from, frame_to
                 )
 
+            # update progress
+            update_progress_time = TinyTimer()
             frame_range = self.frame_ranges[0]
             for fr in self.frame_ranges[1:]:
                 if fr[0] <= frame_to <= fr[1]:
@@ -1431,17 +1439,23 @@ class Track:
             self.progress.frame_range = frame_range
             self.refresh_progress()
             self.progress.notify()
+            update_progress_time = update_progress_time.get_sec()
 
             self.logger.debug(
                 "Iteration time",
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
+                    "apply_updates": f"{apply_updates_time:.6f} sec",
+                    "update_meta": f"{update_meta_time:.6f} sec",
                     "initial_detection_time": f"{initial_detection_time:.6f} sec",
                     "wait update": f"{wait_update_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
+                    "filter disappeared": f"{filter_disappeared_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
                     "update from detections": f"{update_from_detections_time:.6f} sec",
                     "update timelines": f"{update_timelines_time:.6f} sec",
+                    "update progress": f"{update_progress_time:.6f} sec",
+                    "other": f"{total_tm.get_sec() - sum([apply_updates_time, update_meta_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
                     **self.logger_extra,
                 },
             )
