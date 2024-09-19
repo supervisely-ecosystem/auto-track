@@ -1392,6 +1392,7 @@ class Track:
             )
 
             # update from detections
+            update_from_detections_time = 0
             if self.is_detection_enabled():
                 update_from_detections_time, _ = utils.time_it(
                     self.init_timelines_from_detections, frame_from, frame_to
