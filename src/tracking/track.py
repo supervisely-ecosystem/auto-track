@@ -613,6 +613,7 @@ class Track:
                 ],
             )
         ]
+        self.project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
 
         self.timelines: List[Timeline] = []
         init_timelines_time, _ = utils.time_it(self._init_timelines)
@@ -1036,7 +1037,7 @@ class Track:
         return [self.detections_cache[x] for x in range(frame_from, frame_to + 1)]
 
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
-        unmatched_detections = []
+        unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
         threshhold = 0.5  # Maybe add to UI
 
@@ -1052,7 +1053,20 @@ class Track:
                     if tracklet.start_frame <= frame_index <= tracklet.end_frame:
                         this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_index, []))
             # match detections to predictions
-            detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
+            detections_boxes = []
+            filtered_indexes = []
+            for idx, label in enumerate(frame_detections.labels):
+                object_class: sly.ObjClass = self.project_meta.obj_classes.get(
+                    label.obj_class.name, None
+                )
+                if object_class is None:
+                    continue
+                if not issubclass(
+                    object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))
+                ):
+                    continue
+                filtered_indexes.append(idx)
+                detections_boxes.append(label.geometry.to_bbox())
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
             cost_matrix = np.where(cost_matrix < threshhold, cost_matrix, 1.0)
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
@@ -1060,30 +1074,27 @@ class Track:
             )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [
-                    frame_detections.labels[idx] for idx in unmatched_detections_indexes
+                    frame_detections.labels[filtered_indexes[idx]]
+                    for idx in unmatched_detections_indexes
                 ]
                 unmatched_detections_frame = frame_index
                 break
         if len(unmatched_detections) == 0:
             return
         objects = sly.VideoObjectCollection()
-        figures = []
-        project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
-        detected_obj_tm = project_meta.get_tag_meta("auto-detected-object")
+        figures: List[sly.VideoFigure] = []
+        detected_obj_tm = self.project_meta.get_tag_meta("auto-detected-object")
         if detected_obj_tm is None:
             detected_obj_tm = sly.TagMeta("auto-detected-object", sly.TagValueType.NONE)
-            project_meta = project_meta.add_tag_meta(detected_obj_tm)
-            self.api.project.update_meta(self.project_id, project_meta)
+            self.project_meta = self.project_meta.add_tag_meta(detected_obj_tm)
+            self.api.project.update_meta(self.project_id, self.project_meta)
         for label in unmatched_detections:
-            object_class_name = label.obj_class.name
-            object_class: sly.ObjClass = project_meta.obj_classes.get(object_class_name, None)
-            if object_class is None:
-                continue
+            object_class: sly.ObjClass = self.project_meta.obj_classes.get(
+                label.obj_class.name, None
+            )
             video_object = sly.VideoObject(
                 obj_class=object_class, tags=sly.VideoTagCollection([sly.VideoTag(detected_obj_tm)])
             )
-            if not issubclass(object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))):
-                continue
             figure = sly.VideoFigure(
                 video_object, label.geometry, frame_index=unmatched_detections_frame
             )
@@ -1097,17 +1108,28 @@ class Track:
             "Detected new objects",
             extra={
                 "frame": unmatched_detections_frame,
-                "unmatched_detections": unmatched_detections,
+                "unmatched_detections": len(unmatched_detections),
                 "object_ids": objects_ids,
                 "track_info": self.logger_extra,
             },
         )
-        for object_id, figure in zip(objects_ids, figures):
+        figures: List[FigureInfo] = self.api.video.figure.get_by_ids(
+            self.dataset_id, [key_id_map.get_figure_id(fig.key()) for fig in figures]
+        )
+        object_infos = sorted(
+            self.api.video.object.get_list(
+                self.dataset_id, filters=[{"field": "id", "operator": "in", "value": objects_ids}]
+            ),
+            key=lambda x: objects_ids.index(x.id),
+        )
+        for object_info, figure in zip(object_infos, figures):
             timeline = Timeline(
                 self,
-                object_id,
+                object_info.id,
                 unmatched_detections_frame,
                 self.get_frame_range(unmatched_detections_frame)[1],
+                object_info=object_info,
+                figures=[figure],
             )
             self.timelines.append(timeline)
 
@@ -1316,6 +1338,9 @@ class Track:
             total_tm = TinyTimer()
 
             self.apply_updates()
+            self.project_meta = sly.ProjectMeta.from_json(
+                self.api.project.get_meta(self.project_id)
+            )
 
             # init timelines from detections on first frame of the batch
             initial_detection_time = TinyTimer()
