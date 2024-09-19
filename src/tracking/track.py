@@ -1054,6 +1054,7 @@ class Track:
             # match detections to predictions
             detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
+            cost_matrix = np.where(cost_matrix < threshhold, cost_matrix, 1.0)
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
                 utils.linear_assignment(cost_matrix, threshhold)
             )
@@ -1316,6 +1317,7 @@ class Track:
             self.apply_updates()
 
             # init timelines from detections on first frame of the batch
+            initial_detection_time = TinyTimer()
             if self.is_detection_enabled():
                 # billing reserve
                 transaction_id = self.reserve_billing(1)
@@ -1324,6 +1326,7 @@ class Track:
                 if not (frame_from is None or frame_to - frame_from == 0):
                     self.init_timelines_from_detections(frame_from, frame_from)
                 self.withdraw_billing(transaction_id, 1)
+            initial_detection_time = initial_detection_time.get_sec()
 
             wait_update_time = TinyTimer()
             with self._lock:
@@ -1388,9 +1391,10 @@ class Track:
             )
 
             # update from detections
-            update_from_detections_time, _ = utils.time_it(
-                self.init_timelines_from_detections, frame_from, frame_to
-            )
+            if self.is_detection_enabled():
+                update_from_detections_time, _ = utils.time_it(
+                    self.init_timelines_from_detections, frame_from, frame_to
+                )
 
             frame_range = self.frame_ranges[0]
             for fr in self.frame_ranges[1:]:
@@ -1405,6 +1409,7 @@ class Track:
                 "Iteration time",
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
+                    "initial_detection_time": f"{initial_detection_time:.6f} sec",
                     "wait update": f"{wait_update_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
