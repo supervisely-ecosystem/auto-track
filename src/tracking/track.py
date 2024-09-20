@@ -1041,10 +1041,13 @@ class Track:
         unmatched_detections_frame = None
         threshhold = 0.5  # Maybe add to UI
 
+        get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
             frame_from,
             frame_to,
         )
+        get_detections_time = get_detections_time.get_sec()
+        matching_time = TinyTimer()
         for i, frame_detections in enumerate(detections):
             frame_index = frame_from + i
             this_frame_predictions = []
@@ -1079,8 +1082,17 @@ class Track:
                 ]
                 unmatched_detections_frame = frame_index
                 break
+        matching_time = matching_time.get_sec()
         if len(unmatched_detections) == 0:
+            self.logger.debug(
+                "No unmatched detections",
+                extra={
+                    **self.logger_extra,
+                    "time": {"get_detections": get_detections_time, "matching": matching_time},
+                },
+            )
             return
+        upload_time = TinyTimer()
         objects = sly.VideoObjectCollection()
         figures: List[sly.VideoFigure] = []
         detected_obj_tm = self.project_meta.get_tag_meta("auto-detected-object")
@@ -1104,15 +1116,8 @@ class Track:
         key_id_map = sly.KeyIdMap()
         objects_ids = self.api.video.object.append_bulk(self.video_id, objects, key_id_map)
         self.api.video.figure.append_bulk(self.video_id, figures, key_id_map)
-        self.logger.info(
-            "Detected new objects",
-            extra={
-                "frame": unmatched_detections_frame,
-                "unmatched_detections": len(unmatched_detections),
-                "object_ids": objects_ids,
-                "track_info": self.logger_extra,
-            },
-        )
+        upload_time = upload_time.get_sec()
+        init_timelines_time = TinyTimer()
         figures: List[FigureInfo] = self.api.video.figure.get_by_ids(
             self.dataset_id, [key_id_map.get_figure_id(fig.key()) for fig in figures]
         )
@@ -1132,6 +1137,22 @@ class Track:
                 figures=[figure],
             )
             self.timelines.append(timeline)
+        init_timelines_time = init_timelines_time.get_sec()
+        self.logger.info(
+            "Detected new objects",
+            extra={
+                "frame": unmatched_detections_frame,
+                "new_object_ids": objects_ids,
+                "track_info": self.logger_extra,
+                "time": {
+                    "get_detections": get_detections_time,
+                    "matching": matching_time,
+                    "upload": upload_time,
+                    "init_timelines": init_timelines_time,
+                },
+            },
+        )
+
 
     # Upload
     def _get_figures_from_predictions(
