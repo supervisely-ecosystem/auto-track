@@ -595,7 +595,7 @@ class Track:
 
         self.logger = self.api.logger
 
-        self.batch_size = 8
+        self.batch_size = 16
         self.updates: List[Update] = []
         self.updates_pending = False
         self._lock = threading.Lock()
@@ -1152,7 +1152,6 @@ class Track:
                 },
             },
         )
-
 
     # Upload
     def _get_figures_from_predictions(
