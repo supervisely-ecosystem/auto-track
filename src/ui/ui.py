@@ -11,6 +11,7 @@ from supervisely.app.widgets import (
     Checkbox,
 )
 from supervisely import logger
+import yaml
 
 import src.globals as g
 from .common import GEOMETRY_CARDS
@@ -167,6 +168,12 @@ def get_nn_settings():
             else:
                 session = app_selector.get_value()
                 settings[geometry_name] = {"task_id": session}
+            inf_settings = geometry_card.get_inference_settings().get_text()
+            if inf_settings == "":
+                inf_settings = {}
+            else:
+                inf_settings = yaml.safe_load(inf_settings)
+            settings[geometry_name]["inference_settings"] = inf_settings
             settings[geometry_name]["extra_params"] = {
                 name: widget.is_checked() if isinstance(widget, Checkbox) else widget.get_value()
                 for name, widget in extra_params.items()

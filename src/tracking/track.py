@@ -1017,11 +1017,15 @@ class Track:
     def get_detections(self, frame_from: int, frame_to: int):
         if not self.is_detection_enabled():
             return False
-        # conf = self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("extra_params", {}).get("confidence", 0.5)
+        conf = (
+            self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
+            .get("extra_params", {})
+            .get("confidence", 0.5)
+        )
 
         x_from = None
         for x in range(frame_from, frame_to + 1):
-            if x not in self.detections_cache:
+            if (x not in self.detections_cache) or (self.detections_cache[x][1] != conf):
                 x_from = x
                 break
         if x_from is not None:
@@ -1033,8 +1037,8 @@ class Track:
                 frame_to,
             )
             for i, frame_detections in enumerate(detections):
-                self.detections_cache[x_from + i] = frame_detections
-        return [self.detections_cache[x] for x in range(frame_from, frame_to + 1)]
+                self.detections_cache[x_from + i] = (frame_detections, conf)
+        return [self.detections_cache[x][0] for x in range(frame_from, frame_to + 1)]
 
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections: List[sly.Label] = []
