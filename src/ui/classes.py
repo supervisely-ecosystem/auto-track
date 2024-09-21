@@ -230,6 +230,7 @@ class GeometryCard:
         self.inference_settings = None
         self.card = None
         self._nn_url_changed = time.monotonic()
+        self.default_inference_settings = ""
         self.create_widgets()
 
     def create_widgets(self):
@@ -314,13 +315,33 @@ class GeometryCard:
             widget.value_changed(lambda *args: logger.debug("Extra parameters changed"))
 
         self.inference_settings = Editor(
-            language_mode="yaml", readonly=self.geometries[0] != "detector"
+            language_mode="yaml",
+            readonly=self.geometries[0] != "detector",
+            restore_default_button=False,
+        )
+        restore_inferene_settings_button = Button(
+            "Restore default", button_type="text", button_size="mini"
+        )
+        save_inference_settings_button = Button("Save", button_type="text", button_size="mini")
+        inference_settings_container = Container(
+            widgets=[
+                Flexbox(widgets=[restore_inferene_settings_button, save_inference_settings_button]),
+                self.inference_settings,
+            ]
         )
         self.inference_settings_field = Field(
-            self.inference_settings,
+            inference_settings_container,
             title="Inference settings",
             description="Some Models allow user to configure the following parameters. If it is not editable, it means that the model does not support custom inference settings.",
         )
+
+        @restore_inferene_settings_button.click
+        def on_restore_inference_settings_button_click():
+            self.inference_settings.set_text(self.default_inference_settings)
+
+        @save_inference_settings_button.click
+        def on_save_inference_settings_button_click():
+            pass
 
         @self.nn_url_input.value_changed
         def on_nn_url_input_changed(value):
@@ -345,9 +366,11 @@ class GeometryCard:
                 if not isinstance(settings, str):
                     settings = yaml.safe_dump(settings)
                 self.inference_settings.set_text(settings)
-            except Exception as e:
+                self.default_inference_settings = settings
+            except Exception:
                 logger.warning(f"Failed to get inference settings from {value}", exc_info=True)
                 self.inference_settings.set_text("")
+                self.default_inference_settings = ""
 
         self.card = Card(
             title=self.title,
@@ -428,4 +451,6 @@ class GeometryCard:
                 return
             selected_session = Session(g.api, selected_session_id)
             settings = selected_session.get_default_inference_settings()
-            self.inference_settings.set_text(yaml.safe_dump(settings))
+            settings = yaml.safe_dump(settings)
+            self.inference_settings.set_text(settings)
+            self.default_inference_settings = settings
