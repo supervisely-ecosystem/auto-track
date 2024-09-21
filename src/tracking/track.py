@@ -1100,16 +1100,38 @@ class Track:
         objects = sly.VideoObjectCollection()
         figures: List[sly.VideoFigure] = []
         detected_obj_tm = self.project_meta.get_tag_meta("auto-detected-object")
-        if detected_obj_tm is None:
-            detected_obj_tm = sly.TagMeta("auto-detected-object", sly.TagValueType.NONE)
-            self.project_meta = self.project_meta.add_tag_meta(detected_obj_tm)
+        confidence_tm = self.project_meta.get_tag_meta("confidence")
+        if confidence_tm is None:
+            confidence_tm = self.project_meta.get_tag_meta("conf")
+        if detected_obj_tm is None or confidence_tm is None:
+            if detected_obj_tm is None:
+                detected_obj_tm = sly.TagMeta("auto-detected-object", sly.TagValueType.NONE)
+                self.project_meta = self.project_meta.add_tag_meta(detected_obj_tm)
+            if confidence_tm is None:
+                confidence_tm = sly.TagMeta("confidence", sly.TagValueType.ANY_NUMBER)
+                self.project_meta = self.project_meta.add_tag_meta(confidence_tm)
             self.api.project.update_meta(self.project_id, self.project_meta)
         for label in unmatched_detections:
             object_class: sly.ObjClass = self.project_meta.obj_classes.get(
                 label.obj_class.name, None
             )
+            conf_tag = label.tags.get("confidence", None)
+            if conf_tag is None:
+                conf_tag = label.tags.get("conf", None)
+            if conf_tag is None:
+                conf_value = 1
+            else:
+                conf_value = conf_tag.value
             video_object = sly.VideoObject(
-                obj_class=object_class, tags=sly.VideoTagCollection([sly.VideoTag(detected_obj_tm)])
+                obj_class=object_class,
+                tags=sly.VideoTagCollection(
+                    [
+                        sly.VideoTag(detected_obj_tm),
+                        sly.VideoTag(
+                            confidence_tm, conf_value, frame_range=(frame_index, frame_index)
+                        ),
+                    ]
+                ),
             )
             figure = sly.VideoFigure(
                 video_object, label.geometry, frame_index=unmatched_detections_frame
