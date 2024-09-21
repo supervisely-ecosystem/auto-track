@@ -320,9 +320,9 @@ class GeometryCard:
             restore_default_button=False,
         )
         restore_inferene_settings_button = Button(
-            "Restore default", button_type="text", button_size="mini"
+            "Restore default", button_type="text", button_size="small"
         )
-        save_inference_settings_button = Button("Save", button_type="text", button_size="mini")
+        save_inference_settings_button = Button("Save", button_type="text", button_size="small")
         inference_settings_container = Container(
             widgets=[
                 Flexbox(widgets=[restore_inferene_settings_button, save_inference_settings_button]),
