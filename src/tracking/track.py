@@ -613,6 +613,7 @@ class Track:
                 ],
             )
         ]
+        self.project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
 
         self.timelines: List[Timeline] = []
         init_timelines_time, _ = utils.time_it(self._init_timelines)
@@ -1016,11 +1017,15 @@ class Track:
     def get_detections(self, frame_from: int, frame_to: int):
         if not self.is_detection_enabled():
             return False
-        # conf = self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("extra_params", {}).get("confidence", 0.5)
+        conf = (
+            self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
+            .get("extra_params", {})
+            .get("confidence", 0.5)
+        )
 
         x_from = None
         for x in range(frame_from, frame_to + 1):
-            if x not in self.detections_cache:
+            if (x not in self.detections_cache) or (self.detections_cache[x][1] != conf):
                 x_from = x
                 break
         if x_from is not None:
@@ -1032,18 +1037,21 @@ class Track:
                 frame_to,
             )
             for i, frame_detections in enumerate(detections):
-                self.detections_cache[x_from + i] = frame_detections
-        return [self.detections_cache[x] for x in range(frame_from, frame_to + 1)]
+                self.detections_cache[x_from + i] = (frame_detections, conf)
+        return [self.detections_cache[x][0] for x in range(frame_from, frame_to + 1)]
 
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
-        unmatched_detections = []
+        unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
         threshhold = 0.5  # Maybe add to UI
 
+        get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
             frame_from,
             frame_to,
         )
+        get_detections_time = get_detections_time.get_sec()
+        matching_time = TinyTimer()
         for i, frame_detections in enumerate(detections):
             frame_index = frame_from + i
             this_frame_predictions = []
@@ -1052,7 +1060,20 @@ class Track:
                     if tracklet.start_frame <= frame_index <= tracklet.end_frame:
                         this_frame_predictions.extend(tracklet.bboxes_hist.get(frame_index, []))
             # match detections to predictions
-            detections_boxes = [label.geometry.to_bbox() for label in frame_detections.labels]
+            detections_boxes = []
+            filtered_indexes = []
+            for idx, label in enumerate(frame_detections.labels):
+                object_class: sly.ObjClass = self.project_meta.obj_classes.get(
+                    label.obj_class.name, None
+                )
+                if object_class is None:
+                    continue
+                if not issubclass(
+                    object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))
+                ):
+                    continue
+                filtered_indexes.append(idx)
+                detections_boxes.append(label.geometry.to_bbox())
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
             cost_matrix = np.where(cost_matrix < threshhold, cost_matrix, 1.0)
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
@@ -1060,30 +1081,58 @@ class Track:
             )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [
-                    frame_detections.labels[idx] for idx in unmatched_detections_indexes
+                    frame_detections.labels[filtered_indexes[idx]]
+                    for idx in unmatched_detections_indexes
                 ]
                 unmatched_detections_frame = frame_index
                 break
+        matching_time = matching_time.get_sec()
         if len(unmatched_detections) == 0:
-            return
-        objects = sly.VideoObjectCollection()
-        figures = []
-        project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
-        detected_obj_tm = project_meta.get_tag_meta("auto-detected-object")
-        if detected_obj_tm is None:
-            detected_obj_tm = sly.TagMeta("auto-detected-object", sly.TagValueType.NONE)
-            project_meta = project_meta.add_tag_meta(detected_obj_tm)
-            self.api.project.update_meta(self.project_id, project_meta)
-        for label in unmatched_detections:
-            object_class_name = label.obj_class.name
-            object_class: sly.ObjClass = project_meta.obj_classes.get(object_class_name, None)
-            if object_class is None:
-                continue
-            video_object = sly.VideoObject(
-                obj_class=object_class, tags=sly.VideoTagCollection([sly.VideoTag(detected_obj_tm)])
+            self.logger.debug(
+                "No unmatched detections",
+                extra={
+                    **self.logger_extra,
+                    "time": {"get_detections": get_detections_time, "matching": matching_time},
+                },
             )
-            if not issubclass(object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))):
-                continue
+            return
+        upload_time = TinyTimer()
+        objects = sly.VideoObjectCollection()
+        figures: List[sly.VideoFigure] = []
+        detected_obj_tm = self.project_meta.get_tag_meta("auto-detected-object")
+        confidence_tm = self.project_meta.get_tag_meta("confidence")
+        if confidence_tm is None:
+            confidence_tm = self.project_meta.get_tag_meta("conf")
+        if detected_obj_tm is None or confidence_tm is None:
+            if detected_obj_tm is None:
+                detected_obj_tm = sly.TagMeta("auto-detected-object", sly.TagValueType.NONE)
+                self.project_meta = self.project_meta.add_tag_meta(detected_obj_tm)
+            if confidence_tm is None:
+                confidence_tm = sly.TagMeta("confidence", sly.TagValueType.ANY_NUMBER)
+                self.project_meta = self.project_meta.add_tag_meta(confidence_tm)
+            self.api.project.update_meta(self.project_id, self.project_meta)
+        for label in unmatched_detections:
+            object_class: sly.ObjClass = self.project_meta.obj_classes.get(
+                label.obj_class.name, None
+            )
+            conf_tag = label.tags.get("confidence", None)
+            if conf_tag is None:
+                conf_tag = label.tags.get("conf", None)
+            if conf_tag is None:
+                conf_value = 1
+            else:
+                conf_value = conf_tag.value
+            video_object = sly.VideoObject(
+                obj_class=object_class,
+                tags=sly.VideoTagCollection(
+                    [
+                        sly.VideoTag(detected_obj_tm),
+                        sly.VideoTag(
+                            confidence_tm, conf_value, frame_range=(frame_index, frame_index)
+                        ),
+                    ]
+                ),
+            )
             figure = sly.VideoFigure(
                 video_object, label.geometry, frame_index=unmatched_detections_frame
             )
@@ -1093,23 +1142,42 @@ class Track:
         key_id_map = sly.KeyIdMap()
         objects_ids = self.api.video.object.append_bulk(self.video_id, objects, key_id_map)
         self.api.video.figure.append_bulk(self.video_id, figures, key_id_map)
+        upload_time = upload_time.get_sec()
+        init_timelines_time = TinyTimer()
+        figures: List[FigureInfo] = self.api.video.figure.get_by_ids(
+            self.dataset_id, [key_id_map.get_figure_id(fig.key()) for fig in figures]
+        )
+        object_infos = sorted(
+            self.api.video.object.get_list(
+                self.dataset_id, filters=[{"field": "id", "operator": "in", "value": objects_ids}]
+            ),
+            key=lambda x: objects_ids.index(x.id),
+        )
+        for object_info, figure in zip(object_infos, figures):
+            timeline = Timeline(
+                self,
+                object_info.id,
+                unmatched_detections_frame,
+                self.get_frame_range(unmatched_detections_frame)[1],
+                object_info=object_info,
+                figures=[figure],
+            )
+            self.timelines.append(timeline)
+        init_timelines_time = init_timelines_time.get_sec()
         self.logger.info(
             "Detected new objects",
             extra={
                 "frame": unmatched_detections_frame,
-                "unmatched_detections": unmatched_detections,
-                "object_ids": objects_ids,
+                "new_object_ids": objects_ids,
                 "track_info": self.logger_extra,
+                "time": {
+                    "get_detections": get_detections_time,
+                    "matching": matching_time,
+                    "upload": upload_time,
+                    "init_timelines": init_timelines_time,
+                },
             },
         )
-        for object_id, figure in zip(objects_ids, figures):
-            timeline = Timeline(
-                self,
-                object_id,
-                unmatched_detections_frame,
-                self.get_frame_range(unmatched_detections_frame)[1],
-            )
-            self.timelines.append(timeline)
 
     # Upload
     def _get_figures_from_predictions(
@@ -1315,7 +1383,14 @@ class Track:
 
             total_tm = TinyTimer()
 
-            self.apply_updates()
+            # Apply updates
+            apply_updates_time, _ = utils.time_it(self.apply_updates)
+
+            update_meta_time = TinyTimer()
+            self.project_meta = sly.ProjectMeta.from_json(
+                self.api.project.get_meta(self.project_id)
+            )
+            update_meta_time = update_meta_time.get_sec()
 
             # init timelines from detections on first frame of the batch
             initial_detection_time = TinyTimer()
@@ -1338,10 +1413,10 @@ class Track:
             wait_update_time = wait_update_time.get_sec()
 
             if frame_from is None or frame_to - frame_from == 0:
-                if self._upload_thread is not None and self._upload_thread.is_alive():
-                    self._upload_thread.join()
                 if self.wait_for_updates():
                     continue
+                if self._upload_thread is not None and self._upload_thread.is_alive():
+                    self._upload_thread.join()
                 return
 
             self.logger.debug(
@@ -1372,11 +1447,13 @@ class Track:
             batch_predictions: List[List[List[FigureInfo]]]
 
             # filter disappearing figures
+            filter_disappeared_time = TinyTimer()
             for tl_index, timeline_predictions in enumerate(batch_predictions):
                 timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
                 batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
                     frame_from, frame_to, timeline_predictions
                 )
+            filter_disappeared_time = filter_disappeared_time.get_sec()
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
@@ -1398,6 +1475,8 @@ class Track:
                     self.init_timelines_from_detections, frame_from, frame_to
                 )
 
+            # update progress
+            update_progress_time = TinyTimer()
             frame_range = self.frame_ranges[0]
             for fr in self.frame_ranges[1:]:
                 if fr[0] <= frame_to <= fr[1]:
@@ -1406,17 +1485,23 @@ class Track:
             self.progress.frame_range = frame_range
             self.refresh_progress()
             self.progress.notify()
+            update_progress_time = update_progress_time.get_sec()
 
             self.logger.debug(
                 "Iteration time",
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
+                    "apply_updates": f"{apply_updates_time:.6f} sec",
+                    "update_meta": f"{update_meta_time:.6f} sec",
                     "initial_detection_time": f"{initial_detection_time:.6f} sec",
                     "wait update": f"{wait_update_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
+                    "filter disappeared": f"{filter_disappeared_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
                     "update from detections": f"{update_from_detections_time:.6f} sec",
                     "update timelines": f"{update_timelines_time:.6f} sec",
+                    "update progress": f"{update_progress_time:.6f} sec",
+                    "other": f"{total_tm.get_sec() - sum([apply_updates_time, update_meta_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
                     **self.logger_extra,
                 },
             )

@@ -1,3 +1,4 @@
+import time
 from typing import Callable, Dict, List, Tuple, Union
 
 from supervisely.app.widgets import (
@@ -15,8 +16,12 @@ from supervisely.app.widgets import (
     Card,
     Flexbox,
     Text,
+    Editor,
 )
 from supervisely import logger
+from supervisely.nn.inference.session import Session
+import requests
+import yaml
 
 import src.globals as g
 
@@ -222,7 +227,10 @@ class GeometryCard:
         self.description = description
         self.deploy_app = deploy_app
         self.extra_params = extra_params
+        self.inference_settings = None
         self.card = None
+        self._nn_url_changed = time.monotonic()
+        self.default_inference_settings = ""
         self.create_widgets()
 
     def create_widgets(self):
@@ -306,6 +314,63 @@ class GeometryCard:
         for name, widget in self.extra_params.items():
             widget.value_changed(lambda *args: logger.debug("Extra parameters changed"))
 
+        self.inference_settings = Editor(
+            language_mode="yaml",
+            readonly=self.geometries[0] != "detector",
+            restore_default_button=False,
+        )
+        restore_inferene_settings_button = Button("Restore default", button_type="text")
+        save_inference_settings_button = Button("Save", button_type="text")
+        inference_settings_container = Container(
+            widgets=[
+                Flexbox(widgets=[restore_inferene_settings_button, save_inference_settings_button]),
+                self.inference_settings,
+            ],
+            gap=2,
+        )
+        self.inference_settings_field = Field(
+            inference_settings_container,
+            title="Inference settings",
+            description="Some Models allow user to configure the following parameters. If it is not editable, it means that the model does not support custom inference settings.",
+        )
+
+        @restore_inferene_settings_button.click
+        def on_restore_inference_settings_button_click():
+            self.inference_settings.set_text(self.default_inference_settings)
+
+        @save_inference_settings_button.click
+        def on_save_inference_settings_button_click():
+            pass
+
+        @self.nn_url_input.value_changed
+        def on_nn_url_input_changed(value):
+            this_nn_url_changed = time.monotonic()
+            self._nn_url_changed = this_nn_url_changed
+            time.sleep(1)
+            if self._nn_url_changed == this_nn_url_changed:
+                return
+            try:
+                r = requests.post(
+                    f"{value}/smart_segmentation_batch",
+                    json={
+                        "state": {},
+                        "context": {},
+                        "server_address": g.api.server_address,
+                        "api_token": g.api.token,
+                    },
+                    timeout=5,
+                )
+                r.raise_for_status()
+                settings = r.json()["settings"]
+                if not isinstance(settings, str):
+                    settings = yaml.safe_dump(settings)
+                self.inference_settings.set_text(settings)
+                self.default_inference_settings = settings
+            except Exception:
+                logger.warning(f"Failed to get inference settings from {value}", exc_info=True)
+                self.inference_settings.set_text("")
+                self.default_inference_settings = ""
+
         self.card = Card(
             title=self.title,
             description=self.description,
@@ -320,9 +385,10 @@ class GeometryCard:
                             *[x[1] for x in extra_params_widgets.values()],
                         ],
                     ),
-                    Empty(),
+                    self.inference_settings_field,
                 ],
                 direction="horizontal",
+                fractions=[30, 70],
             ),
         )
 
@@ -335,9 +401,13 @@ class GeometryCard:
     def get_extra_params(self) -> Dict[str, Union[Checkbox, InputNumber]]:
         return self.extra_params
 
+    def get_inference_settings(self) -> Editor:
+        return self.inference_settings
+
     def update_nn(self):
         nns = self.deploy_app.get_neural_networks()
         nn_selector, session_selector = self.get_selectors()
+        current_session = session_selector.get_value()
         items = []
         for nn in nns:
             module_id = nn.module_id
@@ -351,6 +421,8 @@ class GeometryCard:
                 ]
             )
         session_selector.set(items=items)
+        if current_session in [item.value for item in items]:
+            session_selector.set_value(current_session)
         if len(items) == 0 and g.ENV.is_cloud():
             items = nn_selector.get_items()
             changed = False
@@ -371,3 +443,13 @@ class GeometryCard:
             if changed:
                 nn_selector.set(items=items)
                 nn_selector.set_value("app")
+
+        if nn_selector.get_value() == "app":
+            selected_session_id = session_selector.get_value()
+            if selected_session_id is None or selected_session_id == current_session:
+                return
+            selected_session = Session(g.api, selected_session_id)
+            settings = selected_session.get_default_inference_settings()
+            settings = yaml.safe_dump(settings)
+            self.inference_settings.set_text(settings)
+            self.default_inference_settings = settings
