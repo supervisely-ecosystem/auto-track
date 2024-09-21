@@ -386,9 +386,9 @@ class GeometryCard:
                         ],
                     ),
                     self.inference_settings_field,
-                    Empty(),
                 ],
                 direction="horizontal",
+                fractions=[30, 70],
             ),
         )
 
