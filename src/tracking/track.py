@@ -637,6 +637,9 @@ class Track:
         }
 
     def _init_timelines(self):
+        if len(self.object_ids) == 0:
+            self.logger.debug("Trying to init timelines with empty object_ids")
+            return
         # Get common data for all timelines to avoid multiple requests
         # Figures
         all_figures_dict: Dict[int, FigureInfo] = {}
