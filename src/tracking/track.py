@@ -108,9 +108,9 @@ class Tracklet:
             return
         if remove_added_figures:
             if except_last:
-                from_frame = self.start_frame + 1
+                from_frame = frame_index + 1
             else:
-                from_frame = self.start_frame
+                from_frame = frame_index
             self.clear(from_frame=from_frame, to_frame=self.end_frame)
         self.end_frame = frame_index - 1
         to_del = []
