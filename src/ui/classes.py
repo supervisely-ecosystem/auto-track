@@ -449,7 +449,11 @@ class GeometryCard:
             if selected_session_id is None or selected_session_id == current_session:
                 return
             selected_session = Session(g.api, selected_session_id)
-            settings = selected_session.get_default_inference_settings()
-            settings = yaml.safe_dump(settings)
+            try:
+                settings = selected_session.get_default_inference_settings()
+                settings = yaml.safe_dump(settings)
+            except Exception:
+                logger.warning("Failed to get inference settings", exc_info=True)
+                settings = ""
             self.inference_settings.set_text(settings)
             self.default_inference_settings = settings
