@@ -101,13 +101,17 @@ class Tracklet:
         ]
         self.last_tracked = (frame_index, figures)
 
-    def cut(self, frame_index: int, remove_added_figures: bool = False):
+    def cut(self, frame_index: int, remove_added_figures: bool = False, except_last: bool = False):
         if frame_index < self.start_frame:
             return
         if frame_index > self.end_frame:
             return
         if remove_added_figures:
-            self.clear(from_frame=frame_index, to_frame=self.end_frame)
+            if except_last:
+                from_frame = self.start_frame + 1
+            else:
+                from_frame = self.start_frame
+            self.clear(from_frame=from_frame, to_frame=self.end_frame)
         self.end_frame = frame_index - 1
         to_del = []
         for frame_index in self.area_hist:
@@ -321,7 +325,9 @@ class Timeline:
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
             ],
         )
-        key_frame_figures = find_key_figures(frame_figures)
+        key_frame_figures = {
+            frame_index: frame_figures,
+        }
         self.key_figures.update(key_frame_figures)
 
         for i, tracklet in enumerate(self.tracklets):
@@ -340,7 +346,7 @@ class Timeline:
                 new_tracklet_end_frame = self._find_end_frame(frame_index, frames_count)
                 new_tracklet = Tracklet(self, frame_index, new_tracklet_end_frame, frame_figures)
                 self.tracklets.insert(i + 1, new_tracklet)
-                tracklet.cut(frame_index, remove_added_figures=True)
+                tracklet.cut(frame_index, remove_added_figures=True, except_last=True)
                 return
         # no intersections - insert new tracklet
         new_tracklet_end_frame = self._find_end_frame(frame_index, frames_count)
