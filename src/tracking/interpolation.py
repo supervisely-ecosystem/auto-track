@@ -12,7 +12,7 @@ INTERPOLATION_LIMIT = 200
 def interpolate_frames(api: sly.Api, context: Dict):
     video_id = context["videoId"]
     figure_ids = context["figureIds"]
-    track_id = context["trackId"]
+    # track_id = context["trackId"]
     video_info = api.video.get_info_by_id(video_id)
     dataset_id = video_info.dataset_id
     figures = api.video.figure.get_by_ids(dataset_id, figure_ids)
@@ -74,7 +74,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 ApiField.GEOMETRY_TYPE: geom.geometry_name(),
                 ApiField.GEOMETRY: geom.to_json(),
                 ApiField.META: {ApiField.FRAME: frame_index},
-                ApiField.TRACK_ID: track_id,
+                # ApiField.TRACK_ID: track_id,
             }
             for geom in created_geometries
         ]
