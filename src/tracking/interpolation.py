@@ -68,15 +68,15 @@ def interpolate_frames(api: sly.Api, context: Dict):
         created_geometries: List[sly.AnyGeometry] = []
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
             i = frame_index - this_figure.frame_index
-            resized: sly.AnyGeometry = this_geometry.resize(
+            moved: sly.AnyGeometry = this_geometry.translate(int(rowshift * i), int(colshift * i))
+            resized: sly.AnyGeometry = moved.resize(
                 in_size=(video_info.frame_height, video_info.frame_width),
                 out_size=(
                     int(video_info.frame_height * (1 + i * rowscale)),
                     int(video_info.frame_width * (1 + i * colscale)),
                 ),
             )
-            moved = resized.translate(int(rowshift * i), int(colshift * i))
-            created_geometries.append(moved)
+            created_geometries.append(resized)
 
         figures_json = [
             {
