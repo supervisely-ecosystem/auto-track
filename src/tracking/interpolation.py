@@ -4,6 +4,7 @@ import uuid
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 import supervisely as sly
 from supervisely.api.module_api import ApiField
+from supervisely import logger
 
 
 INTERPOLATION_LIMIT = 200
@@ -55,14 +56,22 @@ def interpolate_frames(api: sly.Api, context: Dict):
             this_geometry.to_bbox().center.col - next_geometry.to_bbox().center.col
         ) / n_frames
 
+        logger.debug(
+            "Interpolating between frames %d and %d",
+            this_figure.frame_index,
+            next_figure.frame_index,
+        )
+        logger.debug("Scale: %f", scale)
+        logger.debug("Rowshift: %f", rowshift)
+
         created_geometries: List[sly.AnyGeometry] = []
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
             i = frame_index - this_figure.frame_index
             resized: sly.AnyGeometry = this_geometry.resize(
                 in_size=(video_info.frame_width, video_info.frame_height),
                 out_size=(
-                    int(video_info.frame_width * scale),
-                    int(video_info.frame_height * scale),
+                    int(video_info.frame_width * (1 + scale)),
+                    int(video_info.frame_height * (1 + scale)),
                 ),
             )
             moved = resized.translate(int(rowshift * i), int(colshift * i))
