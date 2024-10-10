@@ -47,7 +47,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
         next_geometry = sly.deserialize_geometry(next_figure.geometry_type, next_figure.geometry)
         n_frames = next_figure.frame_index - this_figure.frame_index
 
-        scale = (this_figure.area / next_figure.area) / n_frames
+        scale = (this_geometry.area / next_geometry.area) / n_frames
         rowshift = (
             this_geometry.to_bbox().center.row - next_geometry.to_bbox().center.row
         ) / n_frames
