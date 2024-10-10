@@ -48,21 +48,22 @@ def interpolate_frames(api: sly.Api, context: Dict):
         next_geometry = sly.deserialize_geometry(next_figure.geometry_type, next_figure.geometry)
         n_frames = next_figure.frame_index - this_figure.frame_index
 
-        scale = (next_geometry.area / this_geometry.area) / n_frames
-        rowshift = (
-            next_geometry.to_bbox().center.row - this_geometry.to_bbox().center.row
-        ) / n_frames
-        colshift = (
-            next_geometry.to_bbox().center.col - this_geometry.to_bbox().center.col
-        ) / n_frames
+        this_bbox: sly.Rectangle = this_geometry.to_bbox()
+        next_bbox: sly.Rectangle = next_geometry.to_bbox()
+        rowscale = (next_bbox.height / this_bbox.height) / n_frames
+        colscale = (next_bbox.width / this_bbox.height) / n_frames
+        rowshift = (next_bbox.center.row - this_bbox.center.row) / n_frames
+        colshift = (next_bbox.center.col - this_bbox.center.col) / n_frames
 
         logger.debug(
             "Interpolating between frames %d and %d",
             this_figure.frame_index,
             next_figure.frame_index,
         )
-        logger.debug("Scale: %f", scale)
+        logger.debug("Rowscale: %f", rowscale)
+        logger.debug("Colscale: %f", colscale)
         logger.debug("Rowshift: %f", rowshift)
+        logger.debug("Colshift: %f", colshift)
 
         created_geometries: List[sly.AnyGeometry] = []
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
@@ -70,8 +71,8 @@ def interpolate_frames(api: sly.Api, context: Dict):
             resized: sly.AnyGeometry = this_geometry.resize(
                 in_size=(video_info.frame_height, video_info.frame_width),
                 out_size=(
-                    int(video_info.frame_height * (1 + i * scale)),
-                    int(video_info.frame_width * (1 + i * scale)),
+                    int(video_info.frame_height * (1 + i * rowscale)),
+                    int(video_info.frame_width * (1 + i * colscale)),
                 ),
             )
             moved = resized.translate(int(rowshift * i), int(colshift * i))
