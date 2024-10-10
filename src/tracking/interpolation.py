@@ -82,10 +82,10 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 ApiField.OBJECT_ID: object_id,
                 ApiField.GEOMETRY_TYPE: geom.geometry_name(),
                 ApiField.GEOMETRY: geom.to_json(),
-                ApiField.META: {ApiField.FRAME: frame_index},
+                ApiField.META: {ApiField.FRAME: from_frame + i + 1},
                 # ApiField.TRACK_ID: track_id,
             }
-            for geom in created_geometries
+            for i, geom in enumerate(created_geometries)
         ]
         figures_keys = [uuid.uuid4() for _ in figures_json]
         key_id_map = sly.KeyIdMap()
