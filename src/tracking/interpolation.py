@@ -68,10 +68,10 @@ def interpolate_frames(api: sly.Api, context: Dict):
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
             i = frame_index - this_figure.frame_index
             resized: sly.AnyGeometry = this_geometry.resize(
-                in_size=(video_info.frame_width, video_info.frame_height),
+                in_size=(video_info.frame_height, video_info.frame_width),
                 out_size=(
-                    int(video_info.frame_width * (1 + i * scale)),
                     int(video_info.frame_height * (1 + i * scale)),
+                    int(video_info.frame_width * (1 + i * scale)),
                 ),
             )
             moved = resized.translate(int(rowshift * i), int(colshift * i))
