@@ -20,6 +20,7 @@ def interpolate_box(
     to_frame: int,
     video_info: VideoInfo,
 ) -> List[sly.Rectangle]:
+    logger.debug("Interpolating box")
     n_frames = to_frame - from_frame
     rowdelta = (next_bbox.height - this_bbox.height) / (n_frames)
     coldelta = (next_bbox.width - this_bbox.width) / (n_frames)
@@ -107,8 +108,9 @@ def interpolate_bitmap(
     to_frame: int,
     video_info: VideoInfo,
 ) -> List[sly.Bitmap]:
+    logger.debug("Interpolating bitmap")
     n_frames = to_frame - from_frame
-    created_geometries: List[sly.AnyGeometry] = []
+    created_geometries: List[sly.Bitmap] = []
     this_mask = this_bitmap.get_mask(video_info.frame_height, video_info.frame_width)
     next_mask = next_bitmap.get_mask(video_info.frame_height, video_info.frame_width)
     intermediate_masks = morph_masks(this_mask, next_mask, n_frames)
@@ -168,14 +170,14 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 next_figure.frame_index,
                 video_info,
             )
-        elif this_geometry.geometry_name() == sly.Bitmap.geometry_name():
-            created_geometries = interpolate_bitmap(
-                this_geometry,
-                next_geometry,
-                this_figure.frame_index,
-                next_figure.frame_index,
-                video_info,
-            )
+        # elif this_geometry.geometry_name() == sly.Bitmap.geometry_name():
+        #     created_geometries = interpolate_bitmap(
+        #         this_geometry,
+        #         next_geometry,
+        #         this_figure.frame_index,
+        #         next_figure.frame_index,
+        #         video_info,
+        #     )
         else:
             raise ValueError(f"Unsupported geometry type: {this_geometry.geometry_name()}")
 
