@@ -90,9 +90,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 int(i * rowdelta),
                 int(i * coldelta),
             )
-            moved: sly.AnyGeometry = this_geometry.translate(int(rowshift * i), int(colshift * i))
-            logger.debug("Moved: %s", (moved.to_bbox().center.row, moved.to_bbox().center.col))
-            resized: sly.AnyGeometry = moved.resize(
+            resized: sly.AnyGeometry = this_geometry.resize(
                 in_size=(video_info.frame_height, video_info.frame_width),
                 out_size=(
                     int(video_info.frame_height * (1 + rowdelta * i / this_bbox.height)),
@@ -102,7 +100,14 @@ def interpolate_frames(api: sly.Api, context: Dict):
             logger.debug(
                 "Resized: %s", (resized.to_bbox().center.row, resized.to_bbox().center.col)
             )
-            created_geometries.append(resized)
+            target = int(this_bbox.center.row + i * rowshift), int(
+                this_bbox.center.col + i * colshift
+            )
+            moved: sly.AnyGeometry = resized.translate(
+                target[0] - resized.to_bbox().center.row, target[1] - resized.to_bbox().center.col
+            )
+            logger.debug("Moved: %s", (moved.to_bbox().center.row, moved.to_bbox().center.col))
+            created_geometries.append(moved)
 
         figures_json = [
             {
