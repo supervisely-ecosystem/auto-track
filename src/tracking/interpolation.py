@@ -65,6 +65,18 @@ def interpolate_frames(api: sly.Api, context: Dict):
         logger.debug("Rowshift: %f", rowshift)
         logger.debug("Colshift: %f", colshift)
         logger.debug("Center: %s", (this_bbox.center.row, this_bbox.center.col))
+        logger.debug(
+            "height this: %f, height next: %f, diff: %f",
+            this_bbox.height,
+            next_bbox.height,
+            next_bbox.height - this_bbox.height,
+        )
+        logger.debug(
+            "width this: %f, width next: %f, diff: %f",
+            this_bbox.width,
+            next_bbox.width,
+            next_bbox.width - this_bbox.width,
+        )
 
         created_geometries: List[sly.AnyGeometry] = []
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
