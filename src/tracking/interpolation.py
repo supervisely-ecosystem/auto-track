@@ -13,7 +13,7 @@ INTERPOLATION_LIMIT = 200
 def interpolate_frames(api: sly.Api, context: Dict):
     video_id = context["videoId"]
     figure_ids = context["figureIds"]
-    # track_id = context["trackId"]
+    track_id = context.get("trackId", None)
     video_info = api.video.get_info_by_id(video_id)
     dataset_id = video_info.dataset_id
     figures = api.video.figure.get_by_ids(dataset_id, figure_ids)
@@ -64,17 +64,24 @@ def interpolate_frames(api: sly.Api, context: Dict):
         logger.debug("Colscale: %f", colscale)
         logger.debug("Rowshift: %f", rowshift)
         logger.debug("Colshift: %f", colshift)
+        logger.debug("Center: %s", (this_bbox.center.row, this_bbox.center.col))
 
         created_geometries: List[sly.AnyGeometry] = []
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
+            logger.debug("Interpolating frame %d", frame_index)
             i = frame_index - this_figure.frame_index
+            logger.debug("i: %d, shift: (%d, %d)", i, int(rowshift * i), int(colshift * i))
             moved: sly.AnyGeometry = this_geometry.translate(int(rowshift * i), int(colshift * i))
+            logger.debug("Moved: %s", (moved.to_bbox().center.row, moved.to_bbox().center.col))
             resized: sly.AnyGeometry = moved.resize(
                 in_size=(video_info.frame_height, video_info.frame_width),
                 out_size=(
                     int(video_info.frame_height * (1 + i * rowscale)),
                     int(video_info.frame_width * (1 + i * colscale)),
                 ),
+            )
+            logger.debug(
+                "Resized: %s", (resized.to_bbox().center.row, resized.to_bbox().center.col)
             )
             created_geometries.append(resized)
 
@@ -84,7 +91,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 ApiField.GEOMETRY_TYPE: geom.geometry_name(),
                 ApiField.GEOMETRY: geom.to_json(),
                 ApiField.META: {ApiField.FRAME: from_frame + i + 1},
-                # ApiField.TRACK_ID: track_id,
+                ApiField.TRACK_ID: track_id,
             }
             for i, geom in enumerate(created_geometries)
         ]
