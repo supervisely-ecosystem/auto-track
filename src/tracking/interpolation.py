@@ -50,18 +50,18 @@ def interpolate_frames(api: sly.Api, context: Dict):
 
         this_bbox: sly.Rectangle = this_geometry.to_bbox()
         next_bbox: sly.Rectangle = next_geometry.to_bbox()
-        rowscale = (next_bbox.height / this_bbox.height) / n_frames
-        colscale = (next_bbox.width / this_bbox.height) / n_frames
-        rowshift = (next_bbox.center.row - this_bbox.center.row) / n_frames
-        colshift = (next_bbox.center.col - this_bbox.center.col) / n_frames
+        rowdelta = (next_bbox.height - this_bbox.height) / (n_frames - 1)
+        coldelta = (next_bbox.width - this_bbox.width) / (n_frames - 1)
+        rowshift = (next_bbox.center.row - this_bbox.center.row) / (n_frames - 1)
+        colshift = (next_bbox.center.col - this_bbox.center.col) / (n_frames - 1)
 
         logger.debug(
             "Interpolating between frames %d and %d",
             this_figure.frame_index,
             next_figure.frame_index,
         )
-        logger.debug("Rowscale: %f", rowscale)
-        logger.debug("Colscale: %f", colscale)
+        logger.debug("Rowdelta: %f", rowdelta)
+        logger.debug("Coldelta: %f", coldelta)
         logger.debug("Rowshift: %f", rowshift)
         logger.debug("Colshift: %f", colshift)
         logger.debug("Center: %s", (this_bbox.center.row, this_bbox.center.col))
@@ -70,14 +70,21 @@ def interpolate_frames(api: sly.Api, context: Dict):
         for frame_index in range(this_figure.frame_index + 1, next_figure.frame_index):
             logger.debug("Interpolating frame %d", frame_index)
             i = frame_index - this_figure.frame_index
-            logger.debug("i: %d, shift: (%d, %d)", i, int(rowshift * i), int(colshift * i))
+            logger.debug(
+                "i: %d, shift: (%d, %d), delta: (%d, %d)",
+                i,
+                int(rowshift * i),
+                int(colshift * i),
+                int(i * rowdelta),
+                int(i * coldelta),
+            )
             moved: sly.AnyGeometry = this_geometry.translate(int(rowshift * i), int(colshift * i))
             logger.debug("Moved: %s", (moved.to_bbox().center.row, moved.to_bbox().center.col))
             resized: sly.AnyGeometry = moved.resize(
                 in_size=(video_info.frame_height, video_info.frame_width),
                 out_size=(
-                    int(video_info.frame_height * (1 + i * rowscale)),
-                    int(video_info.frame_width * (1 + i * colscale)),
+                    int(video_info.frame_height + (i * rowdelta)),
+                    int(video_info.frame_width + (i * coldelta)),
                 ),
             )
             logger.debug(
