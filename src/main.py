@@ -200,7 +200,7 @@ def interpolate(request: Request, task: BackgroundTasks):
     if api is None:
         api = g.api
     context = request.state.context
-    interpolate_frames(api, context)
+    task.add_task(interpolate_frames, api, context)
 
 
 update_all_nn()
