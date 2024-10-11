@@ -50,10 +50,10 @@ def interpolate_frames(api: sly.Api, context: Dict):
 
         this_bbox: sly.Rectangle = this_geometry.to_bbox()
         next_bbox: sly.Rectangle = next_geometry.to_bbox()
-        rowdelta = (next_bbox.height - this_bbox.height) / (n_frames - 1)
-        coldelta = (next_bbox.width - this_bbox.width) / (n_frames - 1)
-        rowshift = (next_bbox.center.row - this_bbox.center.row) / (n_frames - 1)
-        colshift = (next_bbox.center.col - this_bbox.center.col) / (n_frames - 1)
+        rowdelta = (next_bbox.height - this_bbox.height) / (n_frames)
+        coldelta = (next_bbox.width - this_bbox.width) / (n_frames)
+        rowshift = (next_bbox.center.row - this_bbox.center.row) / (n_frames)
+        colshift = (next_bbox.center.col - this_bbox.center.col) / (n_frames)
 
         logger.debug(
             "Interpolating between frames %d and %d",
