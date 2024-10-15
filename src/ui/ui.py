@@ -58,13 +58,13 @@ disappear_by_distance_multiplier_field = Field(
     "Distance deviation multiplier",
     "Multiplier for distance deviation threshold.",
 )
-disappear_by_distance_position_deviation = InputNumber(min=1.0, max=10, step=0.05, value=1)
+disappear_by_distance_position_deviation = InputNumber(min=0.1, max=10, step=0.05, value=1)
 disappear_by_distance_position_deviation_field = Field(
     disappear_by_distance_position_deviation,
     "Position Standard Deviation",
     "Represents how uncertain you are about the object's motion. Higher values mean you expect the object's position to vary unpredictably.",
 )
-disappear_by_distance_velocity_deviation = InputNumber(min=0.5, max=10, step=0.05, value=0.5)
+disappear_by_distance_velocity_deviation = InputNumber(min=0.1, max=10, step=0.05, value=0.5)
 disappear_by_distance_velocity_deviation_field = Field(
     disappear_by_distance_velocity_deviation,
     "Velocity Standard Deviation",
