@@ -166,7 +166,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
         next_geometry = sly.deserialize_geometry(next_figure.geometry_type, next_figure.geometry)
 
         if this_geometry.geometry_name() != next_geometry.geometry_name():
-            logger.warn(
+            logger.warning(
                 f"Cannot interpolate between {this_geometry.geometry_name()} and {next_geometry.geometry_name()}"
             )
             continue
@@ -188,7 +188,8 @@ def interpolate_frames(api: sly.Api, context: Dict):
         #         video_info,
         #     )
         else:
-            raise ValueError(f"Unsupported geometry type: {this_geometry.geometry_name()}")
+            logger.warning(f"Unsupported geometry type: {this_geometry.geometry_name()}")
+            continue
 
         figures_json = [
             {
