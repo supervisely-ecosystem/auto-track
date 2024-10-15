@@ -148,9 +148,14 @@ def interpolate_frames(api: sly.Api, context: Dict):
         ],
     )
 
-    for this_figure in figures:
+    for i, this_figure in enumerate(figures):
         api.video.notify_progress(
-            track_id, video_id, frame_start=from_frame, frame_end=end_frame, current=0, total=1
+            track_id,
+            video_id,
+            frame_start=from_frame,
+            frame_end=end_frame,
+            current=i,
+            total=len(figures),
         )
         object_id = this_figure.object_id
         this_object_figures = [
@@ -215,6 +220,14 @@ def interpolate_frames(api: sly.Api, context: Dict):
             video_id,
             frame_start=from_frame,
             frame_end=next_figure.frame_index,
-            current=1,
-            total=1,
+            current=i + 1,
+            total=len(figures),
         )
+    api.video.notify_progress(
+        track_id,
+        video_id,
+        frame_start=from_frame,
+        frame_end=end_frame,
+        current=len(figures),
+        total=len(figures),
+    )
