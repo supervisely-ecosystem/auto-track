@@ -98,7 +98,7 @@ def morph_masks(initial_mask, final_mask, num_iterations):
             indices_to_remove = remove_indices[remove_time_steps <= t]
             mask_t[tuple(indices_to_remove.T)] = False
 
-        masks.append(mask_t.astype(np.uint8))
+        masks.append(mask_t)
 
     return masks
 
@@ -179,14 +179,14 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 next_figure.frame_index,
                 video_info,
             )
-        # elif this_geometry.geometry_name() == sly.Bitmap.geometry_name():
-        #     created_geometries = interpolate_bitmap(
-        #         this_geometry,
-        #         next_geometry,
-        #         this_figure.frame_index,
-        #         next_figure.frame_index,
-        #         video_info,
-        #     )
+        elif this_geometry.geometry_name() == sly.Bitmap.geometry_name():
+            created_geometries = interpolate_bitmap(
+                this_geometry,
+                next_geometry,
+                this_figure.frame_index,
+                next_figure.frame_index,
+                video_info,
+            )
         else:
             logger.warning(f"Unsupported geometry type: {this_geometry.geometry_name()}")
             continue
