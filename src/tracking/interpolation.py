@@ -9,6 +9,8 @@ from supervisely.api.module_api import ApiField
 from supervisely import logger
 from supervisely.api.video.video_api import VideoInfo
 
+import src.utils as utils
+
 
 INTERPOLATION_LIMIT = 200
 
@@ -119,6 +121,7 @@ def interpolate_bitmap(
     return created_geometries
 
 
+@utils.send_error_data
 def interpolate_frames(api: sly.Api, context: Dict):
     video_id = context["videoId"]
     figure_ids = context["figureIds"]
