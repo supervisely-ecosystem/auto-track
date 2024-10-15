@@ -128,6 +128,9 @@ def interpolate_frames(api: sly.Api, context: Dict):
     figures = api.video.figure.get_by_ids(dataset_id, figure_ids)
     from_frame = min([figure.frame_index for figure in figures])
     end_frame = min(from_frame + INTERPOLATION_LIMIT, video_info.frames_count)
+    api.video.notify_progress(
+        track_id, video_id, frame_start=from_frame, frame_end=end_frame, current=0, total=1
+    )
 
     all_figures: List[FigureInfo] = api.video.figure.get_list(
         dataset_id=dataset_id,
@@ -143,6 +146,9 @@ def interpolate_frames(api: sly.Api, context: Dict):
     )
 
     for this_figure in figures:
+        api.video.notify_progress(
+            track_id, video_id, frame_start=from_frame, frame_end=end_frame, current=0, total=1
+        )
         object_id = this_figure.object_id
         this_object_figures = [
             fig
@@ -199,4 +205,12 @@ def interpolate_frames(api: sly.Api, context: Dict):
             figures_json=figures_json,
             figures_keys=figures_keys,
             key_id_map=key_id_map,
+        )
+        api.video.notify_progress(
+            track_id,
+            video_id,
+            frame_start=from_frame,
+            frame_end=next_figure.frame_index,
+            current=1,
+            total=1,
         )
