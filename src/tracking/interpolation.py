@@ -113,10 +113,10 @@ def interpolate_bitmap(
     logger.debug("Interpolating bitmap")
     n_frames = to_frame - from_frame
     created_geometries: List[sly.Bitmap] = []
-    this_mask = this_bitmap.get_mask(video_info.frame_height, video_info.frame_width)
-    next_mask = next_bitmap.get_mask(video_info.frame_height, video_info.frame_width)
+    this_mask = this_bitmap.get_mask((video_info.frame_height, video_info.frame_width))
+    next_mask = next_bitmap.get_mask((video_info.frame_height, video_info.frame_width))
     intermediate_masks = morph_masks(this_mask, next_mask, n_frames)
-    for mask in enumerate(intermediate_masks):
+    for mask in intermediate_masks:
         created_geometries.append(sly.Bitmap(mask))
     return created_geometries
 
