@@ -1,4 +1,5 @@
 from functools import partial
+import cv2
 import numpy as np
 from typing import Dict, List
 import uuid
@@ -193,6 +194,13 @@ def interpolate_bitmap(
     return created_geometries
 
 
+def simplify_polygon(polygon: sly.Polygon, epsilon: float = 1) -> sly.Polygon:
+    points = cv2.approxPolyDP(
+        polygon.exterior_np.reshape((-1, 1, 2)), epsilon=epsilon, closed=True
+    ).reshape(-1, 2)
+    return sly.Polygon(exterior=[sly.PointLocation(x, y) for x, y in points])
+
+
 def interpolate_polygon(
     this_polygon: sly.Polygon,
     next_polygon: sly.Polygon,
@@ -209,7 +217,8 @@ def interpolate_polygon(
     intermediate_masks = morph_masks_gen(this_mask, next_mask, n_frames)
     for mask in intermediate_masks:
         polys = sly.Bitmap(mask).to_contours()
-        created_geometries.append(polys)
+        polys = [simplify_polygon(poly) for poly in polys]
+
         if notify_func is not None:
             notify_func()
     logger.debug("Done interpolating polygon")
