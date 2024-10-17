@@ -217,8 +217,8 @@ def interpolate_polygon(
     intermediate_masks = morph_masks_gen(this_mask, next_mask, n_frames)
     for mask in intermediate_masks:
         polys = sly.Bitmap(mask).to_contours()
-        # polys = [simplify_polygon(poly) for poly in polys]
-
+        polys = [simplify_polygon(poly) for poly in polys]
+        created_geometries.append(polys)
         if notify_func is not None:
             notify_func()
     logger.debug("Done interpolating polygon")
