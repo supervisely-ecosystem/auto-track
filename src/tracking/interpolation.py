@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 from typing import Dict, List
 import uuid
@@ -48,7 +49,7 @@ def interpolate_box(
     return created_geometries
 
 
-def morph_masks(mask1, mask2, N):
+def morph_masks_gen(mask1, mask2, N):
     """
     Morphs mask1 into mask2 over N iterations by cropping to minimal bounding boxes,
     performing morphing on cropped masks, and then placing the result back into the full mask.
@@ -135,9 +136,7 @@ def morph_masks(mask1, mask2, N):
         # Place the cropped mask back into the full-sized mask
         mask_n_full = np.zeros_like(mask1, dtype=np.uint8)
         mask_n_full[y_min_all:y_max_all, x_min_all:x_max_all] = mask_n_cropped.astype(np.uint8)
-        inner_masks.append(mask_n_full)
-
-    return inner_masks
+        yield mask_n_full
 
 
 def get_affine_transform(bbox_from, bbox_to):
@@ -178,15 +177,18 @@ def interpolate_bitmap(
     from_frame: int,
     to_frame: int,
     video_info: VideoInfo,
+    notify_func=None,
 ) -> List[sly.Bitmap]:
     logger.debug("Interpolating bitmap")
     n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Bitmap] = []
     this_mask = this_bitmap.get_mask((video_info.frame_height, video_info.frame_width))
     next_mask = next_bitmap.get_mask((video_info.frame_height, video_info.frame_width))
-    intermediate_masks = morph_masks(this_mask, next_mask, n_frames)
+    intermediate_masks = morph_masks_gen(this_mask, next_mask, n_frames)
     for mask in intermediate_masks:
         created_geometries.append(sly.Bitmap(mask))
+        if notify_func is not None:
+            notify_func()
     logger.debug("Done interpolating bitmap. Masks: %s", len(created_geometries))
     return created_geometries
 
@@ -202,7 +204,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
     from_frame = min([figure.frame_index for figure in figures])
     end_frame = min(from_frame + INTERPOLATION_LIMIT, video_info.frames_count)
     api.video.notify_progress(
-        track_id, video_id, frame_start=from_frame, frame_end=end_frame, current=0, total=1
+        track_id, video_id, frame_start=from_frame, frame_end=from_frame + 1, current=0, total=1
     )
 
     all_figures: List[FigureInfo] = api.video.figure.get_list(
@@ -218,6 +220,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
         ],
     )
 
+    next_figures = []
     for i, this_figure in enumerate(figures):
         object_id = this_figure.object_id
         this_object_figures = [
@@ -228,16 +231,22 @@ def interpolate_frames(api: sly.Api, context: Dict):
         if len(this_object_figures) == 0:
             continue
         next_figure = min(this_object_figures, key=lambda fig: fig.frame_index)
+        next_figures.append(next_figure)
 
-        api.video.notify_progress(
-            track_id,
-            video_id,
-            frame_start=from_frame,
-            frame_end=next_figure.frame_index,
-            current=i,
-            total=len(figures),
-        )
-
+    end_frame = max([f.frame_index for f in next_figures])
+    total = 0
+    for this_figure, next_figure in zip(figures, next_figures):
+        total += next_figure.frame_index - this_figure.frame_index
+    api.video.notify_progress(
+        track_id,
+        video_id,
+        frame_start=from_frame,
+        frame_end=end_frame,
+        current=0,
+        total=total,
+    )
+    done = 0
+    for i, this_figure, next_figure in zip(list(range(len(figures))), figures, next_figures):
         # interpolate between this_figure and next_figure
         this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
         next_geometry = sly.deserialize_geometry(next_figure.geometry_type, next_figure.geometry)
@@ -257,12 +266,27 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 video_info,
             )
         elif this_geometry.geometry_name() == sly.Bitmap.geometry_name():
+            current = done
+
+            def _notify_func():
+                nonlocal current
+                current += 1
+                api.video.notify_progress(
+                    track_id,
+                    video_id,
+                    frame_start=from_frame,
+                    frame_end=end_frame,
+                    current=current,
+                    total=total,
+                )
+
             created_geometries = interpolate_bitmap(
                 this_geometry,
                 next_geometry,
                 this_figure.frame_index,
                 next_figure.frame_index,
                 video_info,
+                notify_func=_notify_func,
             )
         else:
             logger.warning(f"Unsupported geometry type: {this_geometry.geometry_name()}")
@@ -287,19 +311,20 @@ def interpolate_frames(api: sly.Api, context: Dict):
             figures_keys=figures_keys,
             key_id_map=key_id_map,
         )
+        done += next_figure.frame_index - this_figure.frame_index
         api.video.notify_progress(
             track_id,
             video_id,
             frame_start=from_frame,
-            frame_end=next_figure.frame_index,
-            current=i + 1,
-            total=len(figures),
+            frame_end=end_frame,
+            current=done,
+            total=total,
         )
     api.video.notify_progress(
         track_id,
         video_id,
         frame_start=from_frame,
         frame_end=end_frame,
-        current=len(figures),
-        total=len(figures),
+        current=total,
+        total=total,
     )
