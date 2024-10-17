@@ -87,7 +87,7 @@ def morph_masks(mask1, mask2, N):
             order=0,
             preserve_range=True,
         )
-        
+
         mask1_n = mask1_n > 0.5
         mask2_n = mask2_n > 0.5
 
@@ -152,6 +152,7 @@ def interpolate_bitmap(
     intermediate_masks = morph_masks(this_mask, next_mask, n_frames)
     for mask in intermediate_masks:
         created_geometries.append(sly.Bitmap(mask))
+    logger.debug("Done interpolating bitmap. Masks: %s", len(created_geometries))
     return created_geometries
 
 
@@ -183,14 +184,6 @@ def interpolate_frames(api: sly.Api, context: Dict):
     )
 
     for i, this_figure in enumerate(figures):
-        api.video.notify_progress(
-            track_id,
-            video_id,
-            frame_start=from_frame,
-            frame_end=end_frame,
-            current=i,
-            total=len(figures),
-        )
         object_id = this_figure.object_id
         this_object_figures = [
             fig
@@ -200,6 +193,16 @@ def interpolate_frames(api: sly.Api, context: Dict):
         if len(this_object_figures) == 0:
             continue
         next_figure = min(this_object_figures, key=lambda fig: fig.frame_index)
+
+        api.video.notify_progress(
+            track_id,
+            video_id,
+            frame_start=from_frame,
+            frame_end=next_figure.frame_index,
+            current=i,
+            total=len(figures),
+        )
+
         # interpolate between this_figure and next_figure
         this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
         next_geometry = sly.deserialize_geometry(next_figure.geometry_type, next_figure.geometry)
