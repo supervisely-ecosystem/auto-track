@@ -145,7 +145,7 @@ def interpolate_bitmap(
     video_info: VideoInfo,
 ) -> List[sly.Bitmap]:
     logger.debug("Interpolating bitmap")
-    n_frames = to_frame - from_frame
+    n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Bitmap] = []
     this_mask = this_bitmap.get_mask((video_info.frame_height, video_info.frame_width))
     next_mask = next_bitmap.get_mask((video_info.frame_height, video_info.frame_width))
