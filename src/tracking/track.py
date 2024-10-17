@@ -523,7 +523,7 @@ class Progress:
             },
         )
 
-        global_stop_indicator = self.track.api.video.notify_progress(
+        self.track.api.video.notify_progress(
             self.track.track_id,
             self.track.video_id,
             self.frame_range[0] + 1,
@@ -531,8 +531,6 @@ class Progress:
             pos,
             self.total,
         )
-        if not stop and global_stop_indicator and self.current < self.total:
-            self.track.global_stop_indicator = True
 
 
 class Update:

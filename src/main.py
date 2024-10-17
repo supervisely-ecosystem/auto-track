@@ -4,7 +4,7 @@ from fastapi import BackgroundTasks, Request, Response
 
 import src.globals as g
 from src.ui import layout, get_nn_settings, update_all_nn, get_disappear_parameters
-from src.tracking import track, cache_video
+from src.tracking import track, cache_video, interpolate_frames
 from src.tracking.track import Update
 
 app = sly.Application(layout=layout)
@@ -187,6 +187,20 @@ def stop_tracking(request: Request, task: BackgroundTasks):
     if cur_track is None:
         return
     cur_track.stop()
+
+
+@server.post("/interpolate")
+def interpolate(request: Request, task: BackgroundTasks):
+    """Interpolate missing frames"""
+    sly.logger.debug(
+        "recieved call to /interpolate",
+        extra={"context": request.state.context, "state": request.state.state},
+    )
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    task.add_task(interpolate_frames, api, context)
 
 
 update_all_nn()
