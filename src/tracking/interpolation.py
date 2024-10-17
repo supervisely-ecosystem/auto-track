@@ -217,7 +217,7 @@ def interpolate_polygon(
     intermediate_masks = morph_masks_gen(this_mask, next_mask, n_frames)
     for mask in intermediate_masks:
         polys = sly.Bitmap(mask).to_contours()
-        polys = [simplify_polygon(poly) for poly in polys]
+        # polys = [simplify_polygon(poly) for poly in polys]
 
         if notify_func is not None:
             notify_func()
@@ -233,7 +233,7 @@ def interpolate_line(
     video_info: VideoInfo,
 ) -> List[sly.Polyline]:
     logger.debug("Interpolating line")
-    n_frames = to_frame - from_frame
+    n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Polyline] = []
     if len(this_line.exterior) != len(next_line.exterior):
         logger.warning("Cannot interpolate lines with different number of points")
@@ -258,7 +258,7 @@ def interpolate_point(
     video_info: VideoInfo,
 ) -> List[sly.Point]:
     logger.debug("Interpolating point")
-    n_frames = to_frame - from_frame
+    n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Point] = []
     for i in range(n_frames):
         t = i / n_frames
