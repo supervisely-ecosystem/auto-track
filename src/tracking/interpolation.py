@@ -202,7 +202,7 @@ def interpolate_polygon(
     notify_func=None,
 ) -> List[sly.Polygon]:
     logger.debug("Interpolating polygon")
-    n_frames = to_frame - from_frame
+    n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Polygon] = []
     this_mask = this_polygon.get_mask((video_info.frame_height, video_info.frame_width))
     next_mask = next_polygon.get_mask((video_info.frame_height, video_info.frame_width))
@@ -213,6 +213,50 @@ def interpolate_polygon(
         if notify_func is not None:
             notify_func()
     logger.debug("Done interpolating polygon")
+    return created_geometries
+
+
+def interpolate_line(
+    this_line: sly.Polyline,
+    next_line: sly.Polyline,
+    from_frame: int,
+    to_frame: int,
+    video_info: VideoInfo,
+) -> List[sly.Polyline]:
+    logger.debug("Interpolating line")
+    n_frames = to_frame - from_frame
+    created_geometries: List[sly.Polyline] = []
+    if len(this_line.exterior) != len(next_line.exterior):
+        logger.warning("Cannot interpolate lines with different number of points")
+        return []
+    for i in range(n_frames):
+        t = i / n_frames
+        points = []
+        for p1, p2 in zip(this_line.exterior, next_line.exterior):
+            x = int(p1.row * (1 - t) + p2.row * t)
+            y = int(p1.col * (1 - t) + p2.col * t)
+            points.append(sly.PointLocation(x, y))
+        created_geometries.append(sly.Polyline(exterior=points))
+    logger.debug("Done interpolating line")
+    return created_geometries
+
+
+def interpolate_point(
+    this_point: sly.Point,
+    next_point: sly.Point,
+    from_frame: int,
+    to_frame: int,
+    video_info: VideoInfo,
+) -> List[sly.Point]:
+    logger.debug("Interpolating point")
+    n_frames = to_frame - from_frame
+    created_geometries: List[sly.Point] = []
+    for i in range(n_frames):
+        t = i / n_frames
+        x = int(this_point.row * (1 - t) + next_point.row * t)
+        y = int(this_point.col * (1 - t) + next_point.col * t)
+        created_geometries.append(sly.Point(row=x, col=y))
+    logger.debug("Done interpolating point")
     return created_geometries
 
 
@@ -327,6 +371,23 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 )
 
             created_geometries = interpolate_polygon(
+                this_geometry,
+                next_geometry,
+                this_figure.frame_index,
+                next_figure.frame_index,
+                video_info,
+            )
+
+        elif this_geometry.geometry_name() == sly.Polyline.geometry_name():
+            created_geometries = interpolate_line(
+                this_geometry,
+                next_geometry,
+                this_figure.frame_index,
+                next_figure.frame_index,
+                video_info,
+            )
+        elif this_geometry.geometry_name() == sly.Point.geometry_name():
+            created_geometries = interpolate_point(
                 this_geometry,
                 next_geometry,
                 this_figure.frame_index,
