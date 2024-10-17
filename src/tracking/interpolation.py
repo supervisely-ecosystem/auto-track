@@ -49,6 +49,18 @@ def interpolate_box(
 
 
 def morph_masks(mask1, mask2, N):
+    """
+    Morphs mask1 into mask2 over N iterations by cropping to minimal bounding boxes,
+    performing morphing on cropped masks, and then placing the result back into the full mask.
+
+    Parameters:
+    - mask1: numpy.ndarray, initial binary mask.
+    - mask2: numpy.ndarray, target binary mask.
+    - N: int, number of intermediate masks.
+
+    Returns:
+    - inner_masks: list of numpy.ndarray, intermediate binary masks of the same size as the input masks.
+    """
     mask1 = mask1.astype(bool)
     mask2 = mask2.astype(bool)
 
@@ -62,28 +74,49 @@ def morph_masks(mask1, mask2, N):
     bbox1 = get_bbox(mask1)
     bbox2 = get_bbox(mask2)
 
+    # Determine the combined bounding box over all iterations
+    x_min_all = min(bbox1[0], bbox2[0])
+    y_min_all = min(bbox1[1], bbox2[1])
+    x_max_all = max(bbox1[2], bbox2[2])
+    y_max_all = max(bbox1[3], bbox2[3])
+
+    # Expand the bounding box by a margin to account for transformations
+    margin = 5  # Adjust as needed
+    x_min_all = max(0, x_min_all - margin)
+    y_min_all = max(0, y_min_all - margin)
+    x_max_all = min(mask1.shape[1], x_max_all + margin)
+    y_max_all = min(mask1.shape[0], y_max_all + margin)
+
+    # Crop masks
+    mask1_cropped = mask1[y_min_all:y_max_all, x_min_all:x_max_all]
+    mask2_cropped = mask2[y_min_all:y_max_all, x_min_all:x_max_all]
+
+    # Adjust bounding boxes to the cropped coordinate system
+    bbox1_cropped = bbox1 - np.array([x_min_all, y_min_all, x_min_all, y_min_all])
+    bbox2_cropped = bbox2 - np.array([x_min_all, y_min_all, x_min_all, y_min_all])
+
     inner_masks = []
     for n in range(1, N + 1):
         t = n / (N + 1)
         # Interpolate bounding boxes
-        bbox_n = (1 - t) * bbox1 + t * bbox2
+        bbox_n = (1 - t) * bbox1_cropped + t * bbox2_cropped
 
         # Compute transformations for mask1 and mask2 to align to bbox_n
-        transform1 = get_affine_transform(bbox1, bbox_n)
-        transform2 = get_affine_transform(bbox2, bbox_n)
+        transform1 = get_affine_transform(bbox1_cropped, bbox_n)
+        transform2 = get_affine_transform(bbox2_cropped, bbox_n)
 
         # Warp masks to the interpolated bounding box
         mask1_n = warp(
-            mask1,
+            mask1_cropped,
             inverse_map=transform1.inverse,
-            output_shape=mask1.shape,
+            output_shape=mask1_cropped.shape,
             order=0,
             preserve_range=True,
         )
         mask2_n = warp(
-            mask2,
+            mask2_cropped,
             inverse_map=transform2.inverse,
-            output_shape=mask2.shape,
+            output_shape=mask2_cropped.shape,
             order=0,
             preserve_range=True,
         )
@@ -97,10 +130,12 @@ def morph_masks(mask1, mask2, N):
 
         # Interpolate SDFs
         sdf_n = (1 - t) * sdf1 + t * sdf2
-        mask_n = sdf_n < 0
+        mask_n_cropped = sdf_n < 0
 
-        # Append the intermediate mask
-        inner_masks.append(mask_n.astype(np.uint8))
+        # Place the cropped mask back into the full-sized mask
+        mask_n_full = np.zeros_like(mask1, dtype=np.uint8)
+        mask_n_full[y_min_all:y_max_all, x_min_all:x_max_all] = mask_n_cropped.astype(np.uint8)
+        inner_masks.append(mask_n_full)
 
     return inner_masks
 
