@@ -193,6 +193,29 @@ def interpolate_bitmap(
     return created_geometries
 
 
+def interpolate_polygon(
+    this_polygon: sly.Polygon,
+    next_polygon: sly.Polygon,
+    from_frame: int,
+    to_frame: int,
+    video_info: VideoInfo,
+    notify_func=None,
+) -> List[sly.Polygon]:
+    logger.debug("Interpolating polygon")
+    n_frames = to_frame - from_frame
+    created_geometries: List[sly.Polygon] = []
+    this_mask = this_polygon.get_mask((video_info.frame_height, video_info.frame_width))
+    next_mask = next_polygon.get_mask((video_info.frame_height, video_info.frame_width))
+    intermediate_masks = morph_masks_gen(this_mask, next_mask, n_frames)
+    for mask in intermediate_masks:
+        polys = sly.Bitmap(mask).to_contours()
+        created_geometries.append(polys)
+        if notify_func is not None:
+            notify_func()
+    logger.debug("Done interpolating polygon")
+    return created_geometries
+
+
 @utils.send_error_data
 def interpolate_frames(api: sly.Api, context: Dict):
     video_id = context["videoId"]
@@ -288,20 +311,58 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 video_info,
                 notify_func=_notify_func,
             )
+        elif this_geometry.geometry_name() == sly.Polygon.geometry_name():
+            current = done
+
+            def _notify_func():
+                nonlocal current
+                current += 1
+                api.video.notify_progress(
+                    track_id,
+                    video_id,
+                    frame_start=from_frame,
+                    frame_end=end_frame,
+                    current=current,
+                    total=total,
+                )
+
+            created_geometries = interpolate_polygon(
+                this_geometry,
+                next_geometry,
+                this_figure.frame_index,
+                next_figure.frame_index,
+                video_info,
+            )
+
         else:
             logger.warning(f"Unsupported geometry type: {this_geometry.geometry_name()}")
             continue
 
-        figures_json = [
-            {
-                ApiField.OBJECT_ID: object_id,
-                ApiField.GEOMETRY_TYPE: geom.geometry_name(),
-                ApiField.GEOMETRY: geom.to_json(),
-                ApiField.META: {ApiField.FRAME: from_frame + i + 1},
-                ApiField.TRACK_ID: track_id,
-            }
-            for i, geom in enumerate(created_geometries)
-        ]
+        figures_json = []
+        for i, geom in enumerate(created_geometries):
+            if isinstance(geom, list):
+                figures_json.extend(
+                    [
+                        {
+                            ApiField.OBJECT_ID: object_id,
+                            ApiField.GEOMETRY_TYPE: sly.Polygon.geometry_name(),
+                            ApiField.GEOMETRY: poly.to_json(),
+                            ApiField.META: {ApiField.FRAME: from_frame + i + 1},
+                            ApiField.TRACK_ID: track_id,
+                        }
+                        for poly in geom
+                    ]
+                )
+            else:
+                figures_json.append(
+                    {
+                        ApiField.OBJECT_ID: object_id,
+                        ApiField.GEOMETRY_TYPE: geom.geometry_name(),
+                        ApiField.GEOMETRY: geom.to_json(),
+                        ApiField.META: {ApiField.FRAME: from_frame + i + 1},
+                        ApiField.TRACK_ID: track_id,
+                    }
+                )
         figures_keys = [uuid.uuid4() for _ in figures_json]
         key_id_map = sly.KeyIdMap()
         # pylint: disable=protected-access
