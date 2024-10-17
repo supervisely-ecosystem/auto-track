@@ -385,6 +385,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 this_figure.frame_index,
                 next_figure.frame_index,
                 video_info,
+                notify_func=_notify_func,
             )
 
         elif this_geometry.geometry_name() == sly.Polyline.geometry_name():
@@ -414,7 +415,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
                 figures_json.extend(
                     [
                         {
-                            ApiField.OBJECT_ID: object_id,
+                            ApiField.OBJECT_ID: this_figure.object_id,
                             ApiField.GEOMETRY_TYPE: sly.Polygon.geometry_name(),
                             ApiField.GEOMETRY: poly.to_json(),
                             ApiField.META: {ApiField.FRAME: from_frame + i + 1},
@@ -426,7 +427,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
             else:
                 figures_json.append(
                     {
-                        ApiField.OBJECT_ID: object_id,
+                        ApiField.OBJECT_ID: this_figure.object_id,
                         ApiField.GEOMETRY_TYPE: geom.geometry_name(),
                         ApiField.GEOMETRY: geom.to_json(),
                         ApiField.META: {ApiField.FRAME: from_frame + i + 1},
