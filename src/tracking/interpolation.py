@@ -1,7 +1,8 @@
 import numpy as np
-from scipy import ndimage
 from typing import Dict, List
 import uuid
+from scipy.ndimage import distance_transform_edt
+from skimage.transform import AffineTransform, warp
 
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 import supervisely as sly
@@ -10,6 +11,7 @@ from supervisely import logger
 from supervisely.api.video.video_api import VideoInfo
 
 import src.utils as utils
+from scipy.ndimage import distance_transform_edt
 
 
 INTERPOLATION_LIMIT = 200
@@ -46,61 +48,93 @@ def interpolate_box(
     return created_geometries
 
 
-def morph_masks(initial_mask, final_mask, num_iterations):
-    # Ensure masks are binary and of the same shape
-    assert initial_mask.shape == final_mask.shape, "Masks must be the same shape"
-    initial_mask = initial_mask.astype(bool)
-    final_mask = final_mask.astype(bool)
+def morph_masks(mask1, mask2, N):
+    mask1 = mask1.astype(bool)
+    mask2 = mask2.astype(bool)
 
-    # Compute pixels to add and remove
-    to_add = np.logical_and(final_mask, np.logical_not(initial_mask))
-    to_remove = np.logical_and(initial_mask, np.logical_not(final_mask))
+    # Compute bounding boxes
+    def get_bbox(mask):
+        coords = np.column_stack(np.nonzero(mask))
+        y_min, x_min = coords.min(axis=0)
+        y_max, x_max = coords.max(axis=0)
+        return np.array([x_min, y_min, x_max, y_max])
 
-    # Compute distance transforms
-    # For adding pixels: distance from initial mask
-    distance_to_initial = ndimage.distance_transform_edt(np.logical_not(initial_mask))
-    add_distances = distance_to_initial[to_add]
+    bbox1 = get_bbox(mask1)
+    bbox2 = get_bbox(mask2)
 
-    # For removing pixels: distance from final mask
-    distance_to_final = ndimage.distance_transform_edt(np.logical_not(final_mask))
-    remove_distances = distance_to_final[to_remove]
+    inner_masks = []
+    for n in range(1, N + 1):
+        t = n / (N + 1)
+        # Interpolate bounding boxes
+        bbox_n = (1 - t) * bbox1 + t * bbox2
 
-    # Normalize distances and assign time steps
-    if add_distances.size > 0:
-        add_time_steps = (add_distances / add_distances.max() * (num_iterations - 1)).astype(int)
-    else:
-        add_time_steps = np.array([], dtype=int)
+        # Compute transformations for mask1 and mask2 to align to bbox_n
+        transform1 = get_affine_transform(bbox1, bbox_n)
+        transform2 = get_affine_transform(bbox2, bbox_n)
 
-    if remove_distances.size > 0:
-        remove_time_steps = (
-            remove_distances / remove_distances.max() * (num_iterations - 1)
-        ).astype(int)
-    else:
-        remove_time_steps = np.array([], dtype=int)
+        # Warp masks to the interpolated bounding box
+        mask1_n = warp(
+            mask1,
+            inverse_map=transform1.inverse,
+            output_shape=mask1.shape,
+            order=0,
+            preserve_range=True,
+        )
+        mask2_n = warp(
+            mask2,
+            inverse_map=transform2.inverse,
+            output_shape=mask2.shape,
+            order=0,
+            preserve_range=True,
+        )
+        
+        mask1_n = mask1_n > 0.5
+        mask2_n = mask2_n > 0.5
 
-    # Get indices of pixels to add and remove
-    add_indices = np.argwhere(to_add)
-    remove_indices = np.argwhere(to_remove)
+        # Compute SDFs
+        sdf1 = distance_transform_edt(~mask1_n) - distance_transform_edt(mask1_n)
+        sdf2 = distance_transform_edt(~mask2_n) - distance_transform_edt(mask2_n)
 
-    # Prepare a list to hold all masks
-    masks = []
+        # Interpolate SDFs
+        sdf_n = (1 - t) * sdf1 + t * sdf2
+        mask_n = sdf_n < 0
 
-    for t in range(num_iterations):
-        mask_t = initial_mask.copy()
+        # Append the intermediate mask
+        inner_masks.append(mask_n.astype(np.uint8))
 
-        # Add pixels scheduled to be added at or before time t
-        if add_indices.size > 0:
-            indices_to_add = add_indices[add_time_steps <= t]
-            mask_t[tuple(indices_to_add.T)] = True
+    return inner_masks
 
-        # Remove pixels scheduled to be removed at or before time t
-        if remove_indices.size > 0:
-            indices_to_remove = remove_indices[remove_time_steps <= t]
-            mask_t[tuple(indices_to_remove.T)] = False
 
-        masks.append(mask_t)
+def get_affine_transform(bbox_from, bbox_to):
+    """
+    Computes an affine transformation matrix that maps bbox_from to bbox_to.
 
-    return masks
+    Parameters:
+    - bbox_from: array-like, [x_min, y_min, x_max, y_max] of the source bounding box.
+    - bbox_to: array-like, [x_min, y_min, x_max, y_max] of the target bounding box.
+
+    Returns:
+    - transform: skimage.transform.AffineTransform object
+    """
+    # Coordinates of the corners of the bounding boxes
+    src = np.array(
+        [
+            [bbox_from[0], bbox_from[1]],  # Top-left
+            [bbox_from[2], bbox_from[1]],  # Top-right
+            [bbox_from[2], bbox_from[3]],  # Bottom-right
+        ]
+    )
+    dst = np.array(
+        [
+            [bbox_to[0], bbox_to[1]],  # Top-left
+            [bbox_to[2], bbox_to[1]],  # Top-right
+            [bbox_to[2], bbox_to[3]],  # Bottom-right
+        ]
+    )
+    # Compute affine transformation
+    transform = AffineTransform()
+    transform.estimate(src, dst)
+    return transform
 
 
 def interpolate_bitmap(
