@@ -1530,7 +1530,6 @@ class Track:
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
                     "apply_updates": f"{apply_updates_time:.6f} sec",
-                    "update_meta": f"{update_meta_time:.6f} sec",
                     "initial_detection_time": f"{initial_detection_time:.6f} sec",
                     "wait update": f"{wait_update_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
@@ -1539,7 +1538,7 @@ class Track:
                     "update from detections": f"{update_from_detections_time:.6f} sec",
                     "update timelines": f"{update_timelines_time:.6f} sec",
                     "update progress": f"{update_progress_time:.6f} sec",
-                    "other": f"{total_tm.get_sec() - sum([apply_updates_time, update_meta_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
+                    "other": f"{total_tm.get_sec() - sum([apply_updates_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
                     **self.logger_extra,
                 },
             )
