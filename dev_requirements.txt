@@ -2,3 +2,4 @@
 git+https://github.com/supervisely/supervisely.git@gpu-cloud
 lap
 cython_bbox
+scipy
