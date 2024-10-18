@@ -172,6 +172,7 @@ def figure_from_prediction(
         meta=prediction.meta.to_json() if prediction.meta is not None else {},
         area=area,
         track_id=track_id,
+        priority=None,
     )
 
 
