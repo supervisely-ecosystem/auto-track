@@ -56,6 +56,13 @@ def smart_segmentation(request: Request):
     nn_settings = get_nn_settings()
     if "url" in nn_settings[g.GEOMETRY_NAME.SMARTTOOL]:
         url = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]["url"]
+        if not url:
+            return {
+                "origin": None,
+                "bitmap": None,
+                "success": False,
+                "error": {"message": "Smart tool model is not selected"},
+            }
         state = request.state.state
         context = request.state.context
         data = {
@@ -68,6 +75,13 @@ def smart_segmentation(request: Request):
         return Response(r.content, status_code=r.status_code, media_type=r.headers["Content-Type"])
     else:
         task_id = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]["task_id"]
+        if task_id is None:
+            return {
+                "origin": None,
+                "bitmap": None,
+                "success": False,
+                "error": {"message": "Smart tool model is not selected"},
+            }
         state = request.state.state
         context = request.state.context
         return g.api.app.send_request(
