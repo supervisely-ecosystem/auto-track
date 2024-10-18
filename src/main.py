@@ -115,7 +115,7 @@ def project_meta_changed(request: Request):
         api = g.api
     context = request.state.context
     project_id = context.get("projectId", None)
-    for cur_track in g.current_tracks:
+    for cur_track in g.current_tracks.values():
         cur_track: Track
         if cur_track.project_id == project_id:
             cur_track.update_project_meta()
