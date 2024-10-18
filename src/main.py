@@ -5,7 +5,7 @@ from fastapi import BackgroundTasks, Request, Response
 import src.globals as g
 from src.ui import layout, get_nn_settings, update_all_nn, get_disappear_parameters
 from src.tracking import track, cache_video, interpolate_frames
-from src.tracking.track import Update
+from src.tracking.track import Update, Track
 
 app = sly.Application(layout=layout)
 
@@ -102,6 +102,23 @@ def available_geometries(request: Request):
             if settings["task_id"]:
                 available.append(geometry_name)
     return available
+
+
+@server.post("/project_meta_changed")
+def project_meta_changed(request: Request):
+    """Project meta changed"""
+    sly.logger.debug(
+        "recieved call to /project_meta_changed", extra={"context": request.state.context}
+    )
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    project_id = context.get("projectId", None)
+    for cur_track in g.current_tracks:
+        cur_track: Track
+        if cur_track.project_id == project_id:
+            cur_track.update_project_meta()
 
 
 @server.post("/continue_track")

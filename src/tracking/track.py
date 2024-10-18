@@ -632,6 +632,9 @@ class Track:
         self.progress.frame_range = self.frame_ranges[0]
         self.refresh_progress()
 
+    def update_project_meta(self):
+        self.project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
+
     @property
     def logger_extra(self):
         return {
@@ -1422,12 +1425,6 @@ class Track:
 
             # Apply updates
             apply_updates_time, _ = utils.time_it(self.apply_updates)
-
-            update_meta_time = TinyTimer()
-            self.project_meta = sly.ProjectMeta.from_json(
-                self.api.project.get_meta(self.project_id)
-            )
-            update_meta_time = update_meta_time.get_sec()
 
             # init timelines from detections on first frame of the batch
             initial_detection_time = TinyTimer()
