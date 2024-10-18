@@ -1810,7 +1810,7 @@ def track(
 
     if update_type == Update.Type.NO_OBJECTS_TAG_CHANGED:
         video_id = context["videoId"]
-        object_id = tag["objectId"]
+        object_id = context["objectId"]
         tracks_to_update = set()
         for cur_track in g.current_tracks.values():
             if cur_track.video_id == video_id:
