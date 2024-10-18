@@ -89,6 +89,21 @@ def smart_segmentation(request: Request):
         )
 
 
+@server.post("/available_geometries")
+def available_geometries(request: Request):
+    sly.logger.debug("recieved call to /available_geometries")
+    nn_settings = get_nn_settings()
+    available = []
+    for geometry_name, settings in nn_settings.items():
+        if "url" in settings:
+            if settings["url"]:
+                available.append(geometry_name)
+        else:
+            if settings["task_id"]:
+                available.append(geometry_name)
+    return available
+
+
 @server.post("/continue_track")
 def continue_track(request: Request, task: BackgroundTasks):
     """
