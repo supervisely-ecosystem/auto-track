@@ -153,8 +153,12 @@ def figure_from_prediction(
     frame_index: int = None,
     tags: List = None,
     track_id: str = None,
+    crop: Tuple[int, int] = None,
 ) -> FigureInfo:
-    area = sly.deserialize_geometry(prediction.geometry_type, prediction.geometry_data).area
+    geometry = sly.deserialize_geometry(prediction.geometry_type, prediction.geometry_data)
+    if crop is not None:
+        geometry = geometry.crop(sly.Rectangle(0, 0, *crop))[0]
+    area = geometry.area
     return FigureInfo(
         id=figure_id,
         class_id=None,

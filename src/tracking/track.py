@@ -945,6 +945,7 @@ class Track:
                         object_id=src_figure.object_id,
                         frame_index=frame_from + 1 + i,
                         track_id=self.track_id,
+                        crop=(self.video_info.frame_height, self.video_info.frame_width),
                     )
                 )
         return result
