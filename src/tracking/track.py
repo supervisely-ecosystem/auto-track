@@ -21,7 +21,7 @@ import src.tracking.inference as inference
 
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
-) -> bool:
+) -> Tuple[bool, List[str]]:
     geoms_to_validate = [geometry_name]
     if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
         geoms_to_validate.extend([g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT])
@@ -36,8 +36,8 @@ def validate_nn_settings_for_geometry(
             raise ValueError(f"NN settings for {', '.join(invalid)} are not specified")
         if logger is not None:
             logger.warning(f"NN settings for {', '.join(invalid)} are not specified")
-        return False
-    return True
+        return False, invalid
+    return True, []
 
 
 def find_key_figures(figures: List[FigureInfo]) -> Dict[int, List[FigureInfo]]:
@@ -688,7 +688,7 @@ class Track:
                 for figure in tracklet.last_tracked[1]:
                     if validate_nn_settings_for_geometry(
                         self.nn_settings, figure.geometry_type, raise_error=False
-                    ):
+                    )[0]:
                         return True
         return False
 
@@ -734,7 +734,7 @@ class Track:
                 for figure in tl_batch[2]
                 if validate_nn_settings_for_geometry(
                     self.nn_settings, figure.geometry_type, raise_error=False, logger=self.logger
-                )
+                )[0]
             ]
         tl_batches = [tl_batch for tl_batch in tl_batches if len(tl_batch[2]) > 0]
         # Filter out finished timelines
@@ -1011,7 +1011,7 @@ class Track:
         return results
 
     def is_detection_enabled(self):
-        valid = validate_nn_settings_for_geometry(
+        valid, _ = validate_nn_settings_for_geometry(
             self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False
         )
         enabled = (
@@ -1378,9 +1378,39 @@ class Track:
             self._upload_thread = threading.Thread(target=self._upload_loop)
             self._upload_thread.start()
 
+    def _check_and_notify_missing_geoms(self):
+        geoms_to_check = set()
+        for timeline in self.timelines:
+            for tracklet in timeline.tracklets:
+                if tracklet.last_tracked is not None:
+                    for figure in tracklet.last_tracked[1]:
+                        geoms_to_check.add(figure.geometry_type)
+        skipping_strs = []
+        if g.GEOMETRY_NAME.SMARTTOOL in geoms_to_check:
+            geoms_to_check.pop(g.GEOMETRY_NAME.SMARTTOOL)
+            _, invalid = validate_nn_settings_for_geometry(
+                self.nn_settings, g.GEOMETRY_NAME.SMARTTOOL, raise_error=False
+            )
+            if invalid:
+                skipping_strs.append(f"Smarttool(missing: {', '.join(invalid)})")
+
+        for geometry_type in geoms_to_check:
+            is_valid, _ = validate_nn_settings_for_geometry(
+                self.nn_settings, geometry_type, raise_error=False
+            )
+            if not is_valid:
+                skipping_strs.append(geometry_type)
+        if skipping_strs:
+            utils.notify_error(
+                self.api,
+                self.track_id,
+                f"Model settings are missing for some geometries, such objects will be skipped. Skipping geometries: {', '.join(skipping_strs)}",
+            )
+
     # RUN main loop
     def run(self):
         # Notify the Annotation tool that the tracking is in progress
+        self._check_and_notify_missing_geoms()
         self.progress.notify()
         while True:  # Main loop
             if self.global_stop_indicator:
