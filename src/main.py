@@ -121,6 +121,32 @@ def project_meta_changed(request: Request):
             cur_track.update_project_meta()
 
 
+@server.post("/no_objects_tag_changed")
+def no_objects_tag_changed(request: Request, task: BackgroundTasks):
+    """No objects tag changed"""
+    sly.logger.debug(
+        "recieved call to /no_objects_tag_changed", extra={"context": request.state.context}
+    )
+    nn_settings = get_nn_settings()
+    disappear_params = get_disappear_parameters()
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    cloud_token = request.headers.get("x-sly-cloud-token", None)
+    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    task.add_task(
+        track,
+        api,
+        context,
+        nn_settings,
+        Update.Type.NO_OBJECTS_TAG_CHANGED,
+        cloud_token=cloud_token,
+        cloud_action_id=cloud_action_id,
+        disappear_params=disappear_params,
+    )
+
+
 @server.post("/continue_track")
 def continue_track(request: Request, task: BackgroundTasks):
     """

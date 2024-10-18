@@ -541,13 +541,14 @@ class Update:
         DELETE = "delete"
         REMOVE_TAG = "remove_tag"
         MANUAL_OBJECTS_REMOVED = "manual_objects_removed"
+        NO_OBJECTS_TAG_CHANGED = "no_objects_tag_changed"
 
     def __init__(
         self,
         object_ids: List[int],
         frame_index: int,
         frames_count: int,
-        type: Literal["track", "continue", "delete"] = "track",
+        type: str = "track",
         tag_id: int = None,
     ):
         self.object_ids = object_ids
@@ -795,6 +796,8 @@ class Track:
             self.no_object_tag_removed(update.object_ids[0], update.frame_index)
         elif update.type == Update.Type.MANUAL_OBJECTS_REMOVED:
             self.manual_figure_removed(update.object_ids[0], update.frame_index)
+        elif update.type == Update.Type.NO_OBJECTS_TAG_CHANGED:
+            self.no_object_tag_changed(update.object_ids[0])
         else:
             self.logger.warning(
                 "Unknown update type", extra={"update": update, **self.logger_extra}
@@ -1678,6 +1681,24 @@ class Track:
             if timeline.object_id == object_id:
                 timeline.manual_figure_removed(frame_index, frame_range[1])
 
+    def no_object_tag_changed(self, object_id: int):
+        for timeline in self.timelines:
+            if timeline.object_id == object_id:
+                timeline.update_object_info()
+                timeline.update_no_object_frames()
+                to_remove = [
+                    tracklet.start_frame
+                    for tracklet in timeline.tracklets
+                    if tracklet.start_frame in timeline.no_object_frames
+                ]
+                for frame in to_remove:
+                    timeline.remove_tracklet(frame, clear=True)
+                for tracklet in timeline.tracklets:
+                    for no_object_frame_index in sorted(timeline.no_object_frames):
+                        if tracklet.start_frame < no_object_frame_index <= tracklet.end_frame:
+                            tracklet.cut(no_object_frame_index, remove_added_figures=True)
+                            break
+
     def prevent_object_upload(self, object_id: int, frame_range: Tuple[int, int]):
         self.prevent_upload_objects.append((object_id, frame_range, time.time()))
 
@@ -1780,6 +1801,27 @@ def track(
                             update_type,
                         )
                     )
+                tracks_to_update.add(cur_track.track_id)
+        for track_id in tracks_to_update:
+            cur_track = g.current_tracks[track_id]
+            cur_track.disappear_params = disappear_params
+            threading.Thread(target=cur_track.apply_updates).start()
+        return
+
+    if update_type == Update.Type.NO_OBJECTS_TAG_CHANGED:
+        video_id = context["videoId"]
+        object_id = tag["objectId"]
+        tracks_to_update = set()
+        for cur_track in g.current_tracks.values():
+            if cur_track.video_id == video_id:
+                cur_track.append_update(
+                    Update(
+                        object_ids=[object_id],
+                        frame_index=0,
+                        frames_count=1,
+                        type=update_type,
+                    )
+                )
                 tracks_to_update.add(cur_track.track_id)
         for track_id in tracks_to_update:
             cur_track = g.current_tracks[track_id]
