@@ -36,6 +36,30 @@ def start_track(request: Request, task: BackgroundTasks):
     return {"message": "Track task started."}
 
 
+@server.post("/tracking_by_detection")
+def start_tracking_by_detection(request: Request, task: BackgroundTasks):
+    sly.logger.debug("recieved call to /tracking_by_detection")
+    nn_settings = get_nn_settings()
+    disappear_params = get_disappear_parameters()
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    cloud_token = request.headers.get("x-sly-cloud-token", None)
+    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    task.add_task(
+        track,
+        api,
+        context,
+        nn_settings,
+        cloud_token=cloud_token,
+        cloud_action_id=cloud_action_id,
+        disappear_params=disappear_params,
+        detection_enabled=True,
+    )
+    return {"message": "Track task started."}
+
+
 @server.post("/cache_video")
 def start_cache_video(request: Request, task: BackgroundTasks):
     """Starts a task to cache the video by its id.

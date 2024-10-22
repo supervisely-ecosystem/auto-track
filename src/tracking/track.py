@@ -576,6 +576,8 @@ class Track:
         cloud_token: str = None,
         cloud_action_id: str = None,
         disappear_params: Dict = None,
+        detection_enabled: bool = False,
+        disappear_enabled: bool = False,
     ):
         self.track_id = track_id
         self.api = api
@@ -608,6 +610,8 @@ class Track:
         self._upload_thread = None
         self.prevent_upload_objects = []
         self.detections_cache = {}
+        self.detection_enabled = detection_enabled
+        self.disappear_enabled = disappear_enabled
 
         self.no_object_tag_ids = [
             t.id
@@ -1026,6 +1030,7 @@ class Track:
             .get("extra_params", {})
             .get("enabled", False)
         )
+        enabled = enabled and self.detection_enabled
         return enabled and valid
 
     def get_detections(self, frame_from: int, frame_to: int):
@@ -1057,7 +1062,7 @@ class Track:
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
-        threshhold = 0.5  # Maybe add to UI
+        threshhold = 0.2  # Maybe add to UI
 
         get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
@@ -1718,6 +1723,11 @@ def track(
 ):
     sly.logger.debug("track", extra={"context": context, "nn_settings": nn_settings})
 
+    track_id = context.get("trackId", None)
+    disappear_enabled = context.get("disappearEnabled", False)
+    for cur_track in g.current_tracks.values():
+        if cur_track.track_id == track_id:
+            cur_track.disappear_enabled = disappear_enabled
     if update_type == Update.Type.DELETE:
         delete_data = []
         for figure in context["figures"]:
@@ -1838,6 +1848,7 @@ def track(
     object_ids = list(context["objectIds"])
     frame_index = context["frameIndex"]
     frames_count = context["frames"]
+    detection_enabled = context.get("detectionEnabled", False)
     user_id = api.user.get_my_info().id
     # direction = context["direction"]
     with g.tracks_lock:
@@ -1860,6 +1871,8 @@ def track(
             cloud_token=cloud_token,
             cloud_action_id=cloud_action_id,
             disappear_params=disappear_params,
+            detection_enabled=detection_enabled,
+            disappear_enabled=disappear_enabled,
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track
