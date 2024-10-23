@@ -1491,11 +1491,12 @@ class Track:
 
             # filter disappearing figures
             filter_disappeared_time = TinyTimer()
-            for tl_index, timeline_predictions in enumerate(batch_predictions):
-                timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
-                batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
-                    frame_from, frame_to, timeline_predictions
-                )
+            if self.disappear_enabled:
+                for tl_index, timeline_predictions in enumerate(batch_predictions):
+                    timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
+                    batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
+                        frame_from, frame_to, timeline_predictions
+                    )
             filter_disappeared_time = filter_disappeared_time.get_sec()
 
             # upload and withdraw billing in parallel
