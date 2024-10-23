@@ -21,7 +21,7 @@ import src.tracking.inference as inference
 
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
-) -> bool:
+) -> Tuple[bool, List[str]]:
     geoms_to_validate = [geometry_name]
     if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
         geoms_to_validate.extend([g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT])
@@ -36,8 +36,8 @@ def validate_nn_settings_for_geometry(
             raise ValueError(f"NN settings for {', '.join(invalid)} are not specified")
         if logger is not None:
             logger.warning(f"NN settings for {', '.join(invalid)} are not specified")
-        return False
-    return True
+        return False, invalid
+    return True, []
 
 
 def find_key_figures(figures: List[FigureInfo]) -> Dict[int, List[FigureInfo]]:
@@ -541,13 +541,14 @@ class Update:
         DELETE = "delete"
         REMOVE_TAG = "remove_tag"
         MANUAL_OBJECTS_REMOVED = "manual_objects_removed"
+        NO_OBJECTS_TAG_CHANGED = "no_objects_tag_changed"
 
     def __init__(
         self,
         object_ids: List[int],
         frame_index: int,
         frames_count: int,
-        type: Literal["track", "continue", "delete"] = "track",
+        type: str = "track",
         tag_id: int = None,
     ):
         self.object_ids = object_ids
@@ -575,6 +576,8 @@ class Track:
         cloud_token: str = None,
         cloud_action_id: str = None,
         disappear_params: Dict = None,
+        detection_enabled: bool = False,
+        disappear_enabled: bool = False,
     ):
         self.track_id = track_id
         self.api = api
@@ -607,6 +610,8 @@ class Track:
         self._upload_thread = None
         self.prevent_upload_objects = []
         self.detections_cache = {}
+        self.detection_enabled = detection_enabled
+        self.disappear_enabled = disappear_enabled
 
         self.no_object_tag_ids = [
             t.id
@@ -631,6 +636,9 @@ class Track:
         self.progress = Progress(self)
         self.progress.frame_range = self.frame_ranges[0]
         self.refresh_progress()
+
+    def update_project_meta(self):
+        self.project_meta = sly.ProjectMeta.from_json(self.api.project.get_meta(self.project_id))
 
     @property
     def logger_extra(self):
@@ -688,7 +696,7 @@ class Track:
                 for figure in tracklet.last_tracked[1]:
                     if validate_nn_settings_for_geometry(
                         self.nn_settings, figure.geometry_type, raise_error=False
-                    ):
+                    )[0]:
                         return True
         return False
 
@@ -734,7 +742,7 @@ class Track:
                 for figure in tl_batch[2]
                 if validate_nn_settings_for_geometry(
                     self.nn_settings, figure.geometry_type, raise_error=False, logger=self.logger
-                )
+                )[0]
             ]
         tl_batches = [tl_batch for tl_batch in tl_batches if len(tl_batch[2]) > 0]
         # Filter out finished timelines
@@ -792,6 +800,8 @@ class Track:
             self.no_object_tag_removed(update.object_ids[0], update.frame_index)
         elif update.type == Update.Type.MANUAL_OBJECTS_REMOVED:
             self.manual_figure_removed(update.object_ids[0], update.frame_index)
+        elif update.type == Update.Type.NO_OBJECTS_TAG_CHANGED:
+            self.no_object_tag_changed(update.object_ids[0])
         else:
             self.logger.warning(
                 "Unknown update type", extra={"update": update, **self.logger_extra}
@@ -939,6 +949,7 @@ class Track:
                         object_id=src_figure.object_id,
                         frame_index=frame_from + 1 + i,
                         track_id=self.track_id,
+                        crop=(self.video_info.frame_height, self.video_info.frame_width),
                     )
                 )
         return result
@@ -1011,7 +1022,7 @@ class Track:
         return results
 
     def is_detection_enabled(self):
-        valid = validate_nn_settings_for_geometry(
+        valid, _ = validate_nn_settings_for_geometry(
             self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False
         )
         enabled = (
@@ -1019,6 +1030,7 @@ class Track:
             .get("extra_params", {})
             .get("enabled", False)
         )
+        enabled = enabled and self.detection_enabled
         return enabled and valid
 
     def get_detections(self, frame_from: int, frame_to: int):
@@ -1050,7 +1062,7 @@ class Track:
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
-        threshhold = 0.5  # Maybe add to UI
+        threshhold = 0.2  # Maybe add to UI
 
         get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
@@ -1378,9 +1390,39 @@ class Track:
             self._upload_thread = threading.Thread(target=self._upload_loop)
             self._upload_thread.start()
 
+    def _check_and_notify_missing_geoms(self):
+        geoms_to_check = set()
+        for timeline in self.timelines:
+            for tracklet in timeline.tracklets:
+                if tracklet.last_tracked is not None:
+                    for figure in tracklet.last_tracked[1]:
+                        geoms_to_check.add(figure.geometry_type)
+        skipping_strs = []
+        if g.GEOMETRY_NAME.SMARTTOOL in geoms_to_check:
+            geoms_to_check.pop(g.GEOMETRY_NAME.SMARTTOOL)
+            _, invalid = validate_nn_settings_for_geometry(
+                self.nn_settings, g.GEOMETRY_NAME.SMARTTOOL, raise_error=False
+            )
+            if invalid:
+                skipping_strs.append(f"Smarttool(missing: {', '.join(invalid)})")
+
+        for geometry_type in geoms_to_check:
+            is_valid, _ = validate_nn_settings_for_geometry(
+                self.nn_settings, geometry_type, raise_error=False
+            )
+            if not is_valid:
+                skipping_strs.append(geometry_type)
+        if skipping_strs:
+            utils.notify_error(
+                self.api,
+                self.track_id,
+                f"Model settings are missing for some geometries, such objects will be skipped. Skipping geometries: {', '.join(skipping_strs)}",
+            )
+
     # RUN main loop
     def run(self):
         # Notify the Annotation tool that the tracking is in progress
+        self._check_and_notify_missing_geoms()
         self.progress.notify()
         while True:  # Main loop
             if self.global_stop_indicator:
@@ -1392,12 +1434,6 @@ class Track:
 
             # Apply updates
             apply_updates_time, _ = utils.time_it(self.apply_updates)
-
-            update_meta_time = TinyTimer()
-            self.project_meta = sly.ProjectMeta.from_json(
-                self.api.project.get_meta(self.project_id)
-            )
-            update_meta_time = update_meta_time.get_sec()
 
             # init timelines from detections on first frame of the batch
             initial_detection_time = TinyTimer()
@@ -1455,11 +1491,12 @@ class Track:
 
             # filter disappearing figures
             filter_disappeared_time = TinyTimer()
-            for tl_index, timeline_predictions in enumerate(batch_predictions):
-                timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
-                batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
-                    frame_from, frame_to, timeline_predictions
-                )
+            if self.disappear_enabled:
+                for tl_index, timeline_predictions in enumerate(batch_predictions):
+                    timeline: Timeline = self.timelines[timelines_indexes[tl_index]]
+                    batch_predictions[tl_index] = timeline.filter_for_disappeared_objects(
+                        frame_from, frame_to, timeline_predictions
+                    )
             filter_disappeared_time = filter_disappeared_time.get_sec()
 
             # upload and withdraw billing in parallel
@@ -1499,7 +1536,6 @@ class Track:
                 extra={
                     "total": f"{total_tm.get_sec():.6f}  sec",
                     "apply_updates": f"{apply_updates_time:.6f} sec",
-                    "update_meta": f"{update_meta_time:.6f} sec",
                     "initial_detection_time": f"{initial_detection_time:.6f} sec",
                     "wait update": f"{wait_update_time:.6f} sec",
                     "prediction": f"{batch_prediction_time:.6f} sec",
@@ -1508,7 +1544,7 @@ class Track:
                     "update from detections": f"{update_from_detections_time:.6f} sec",
                     "update timelines": f"{update_timelines_time:.6f} sec",
                     "update progress": f"{update_progress_time:.6f} sec",
-                    "other": f"{total_tm.get_sec() - sum([apply_updates_time, update_meta_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
+                    "other": f"{total_tm.get_sec() - sum([apply_updates_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
                     **self.logger_extra,
                 },
             )
@@ -1651,6 +1687,24 @@ class Track:
             if timeline.object_id == object_id:
                 timeline.manual_figure_removed(frame_index, frame_range[1])
 
+    def no_object_tag_changed(self, object_id: int):
+        for timeline in self.timelines:
+            if timeline.object_id == object_id:
+                timeline.update_object_info()
+                timeline.update_no_object_frames()
+                to_remove = [
+                    tracklet.start_frame
+                    for tracklet in timeline.tracklets
+                    if tracklet.start_frame in timeline.no_object_frames
+                ]
+                for frame in to_remove:
+                    timeline.remove_tracklet(frame, clear=True)
+                for tracklet in timeline.tracklets:
+                    for no_object_frame_index in sorted(timeline.no_object_frames):
+                        if tracklet.start_frame < no_object_frame_index <= tracklet.end_frame:
+                            tracklet.cut(no_object_frame_index, remove_added_figures=True)
+                            break
+
     def prevent_object_upload(self, object_id: int, frame_range: Tuple[int, int]):
         self.prevent_upload_objects.append((object_id, frame_range, time.time()))
 
@@ -1670,6 +1724,11 @@ def track(
 ):
     sly.logger.debug("track", extra={"context": context, "nn_settings": nn_settings})
 
+    track_id = context.get("trackId", None)
+    disappear_enabled = context.get("detectOffScreen", True)
+    for cur_track in g.current_tracks.values():
+        if cur_track.track_id == track_id:
+            cur_track.disappear_enabled = disappear_enabled
     if update_type == Update.Type.DELETE:
         delete_data = []
         for figure in context["figures"]:
@@ -1760,6 +1819,27 @@ def track(
             threading.Thread(target=cur_track.apply_updates).start()
         return
 
+    if update_type == Update.Type.NO_OBJECTS_TAG_CHANGED:
+        video_id = context["videoId"]
+        object_id = context["objectId"]
+        tracks_to_update = set()
+        for cur_track in g.current_tracks.values():
+            if cur_track.video_id == video_id:
+                cur_track.append_update(
+                    Update(
+                        object_ids=[object_id],
+                        frame_index=0,
+                        frames_count=1,
+                        type=update_type,
+                    )
+                )
+                tracks_to_update.add(cur_track.track_id)
+        for track_id in tracks_to_update:
+            cur_track = g.current_tracks[track_id]
+            cur_track.disappear_params = disappear_params
+            threading.Thread(target=cur_track.apply_updates).start()
+        return
+
     # track
     session_id = context.get("sessionId", context.get("session_id", None))
     if session_id is None:
@@ -1769,6 +1849,7 @@ def track(
     object_ids = list(context["objectIds"])
     frame_index = context["frameIndex"]
     frames_count = context["frames"]
+    detection_enabled = context.get("detectionEnabled", False)
     user_id = api.user.get_my_info().id
     # direction = context["direction"]
     with g.tracks_lock:
@@ -1791,6 +1872,8 @@ def track(
             cloud_token=cloud_token,
             cloud_action_id=cloud_action_id,
             disappear_params=disappear_params,
+            detection_enabled=detection_enabled,
+            disappear_enabled=disappear_enabled,
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track

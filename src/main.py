@@ -5,7 +5,7 @@ from fastapi import BackgroundTasks, Request, Response
 import src.globals as g
 from src.ui import layout, get_nn_settings, update_all_nn, get_disappear_parameters
 from src.tracking import track, cache_video, interpolate_frames
-from src.tracking.track import Update
+from src.tracking.track import Update, Track
 
 app = sly.Application(layout=layout)
 
@@ -36,6 +36,30 @@ def start_track(request: Request, task: BackgroundTasks):
     return {"message": "Track task started."}
 
 
+@server.post("/tracking_by_detection")
+def start_tracking_by_detection(request: Request, task: BackgroundTasks):
+    sly.logger.debug("recieved call to /tracking_by_detection")
+    nn_settings = get_nn_settings()
+    disappear_params = get_disappear_parameters()
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    cloud_token = request.headers.get("x-sly-cloud-token", None)
+    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    task.add_task(
+        track,
+        api,
+        context,
+        nn_settings,
+        cloud_token=cloud_token,
+        cloud_action_id=cloud_action_id,
+        disappear_params=disappear_params,
+        detection_enabled=True,
+    )
+    return {"message": "Track task started."}
+
+
 @server.post("/cache_video")
 def start_cache_video(request: Request, task: BackgroundTasks):
     """Starts a task to cache the video by its id.
@@ -56,6 +80,13 @@ def smart_segmentation(request: Request):
     nn_settings = get_nn_settings()
     if "url" in nn_settings[g.GEOMETRY_NAME.SMARTTOOL]:
         url = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]["url"]
+        if not url:
+            return {
+                "origin": None,
+                "bitmap": None,
+                "success": False,
+                "error": {"message": "Smart tool model is not selected"},
+            }
         state = request.state.state
         context = request.state.context
         data = {
@@ -68,11 +99,76 @@ def smart_segmentation(request: Request):
         return Response(r.content, status_code=r.status_code, media_type=r.headers["Content-Type"])
     else:
         task_id = nn_settings[g.GEOMETRY_NAME.SMARTTOOL]["task_id"]
+        if task_id is None:
+            return {
+                "origin": None,
+                "bitmap": None,
+                "success": False,
+                "error": {"message": "Smart tool model is not selected"},
+            }
         state = request.state.state
         context = request.state.context
         return g.api.app.send_request(
             task_id, "smart_segmentation", data=state, context=context, retries=1
         )
+
+
+@server.post("/available_geometries")
+def available_geometries(request: Request):
+    sly.logger.debug("recieved call to /available_geometries")
+    nn_settings = get_nn_settings()
+    available = []
+    for geometry_name, settings in nn_settings.items():
+        if "url" in settings:
+            if settings["url"]:
+                available.append(geometry_name)
+        else:
+            if settings["task_id"]:
+                available.append(geometry_name)
+    return available
+
+
+@server.post("/project_meta_changed")
+def project_meta_changed(request: Request):
+    """Project meta changed"""
+    sly.logger.debug(
+        "recieved call to /project_meta_changed", extra={"context": request.state.context}
+    )
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    project_id = context.get("projectId", None)
+    for cur_track in g.current_tracks.values():
+        cur_track: Track
+        if cur_track.project_id == project_id:
+            cur_track.update_project_meta()
+
+
+@server.post("/no_objects_tag_changed")
+def no_objects_tag_changed(request: Request, task: BackgroundTasks):
+    """No objects tag changed"""
+    sly.logger.debug(
+        "recieved call to /no_objects_tag_changed", extra={"context": request.state.context}
+    )
+    nn_settings = get_nn_settings()
+    disappear_params = get_disappear_parameters()
+    api = request.state.api
+    if api is None:
+        api = g.api
+    context = request.state.context
+    cloud_token = request.headers.get("x-sly-cloud-token", None)
+    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    task.add_task(
+        track,
+        api,
+        context,
+        nn_settings,
+        Update.Type.NO_OBJECTS_TAG_CHANGED,
+        cloud_token=cloud_token,
+        cloud_action_id=cloud_action_id,
+        disappear_params=disappear_params,
+    )
 
 
 @server.post("/continue_track")

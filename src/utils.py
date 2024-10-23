@@ -153,8 +153,12 @@ def figure_from_prediction(
     frame_index: int = None,
     tags: List = None,
     track_id: str = None,
+    crop: Tuple[int, int] = None,
 ) -> FigureInfo:
-    area = sly.deserialize_geometry(prediction.geometry_type, prediction.geometry_data).area
+    geometry = sly.deserialize_geometry(prediction.geometry_type, prediction.geometry_data)
+    if crop is not None:
+        geometry = geometry.crop(sly.Rectangle(0, 0, *crop))[0]
+    area = geometry.area
     return FigureInfo(
         id=figure_id,
         class_id=None,
@@ -211,19 +215,23 @@ def send_error_data(func):
             track_id = context.get("trackId", None)
             api.logger.error("An error occured:", exc_info=True)
 
-            api.post(
-                "videos.notify-annotation-tool",
-                data={
-                    "type": "videos:tracking-error",
-                    "data": {
-                        "trackId": str(track_id),
-                        "error": {"message": str(exc)},
-                    },
-                },
-            )
+            notify_error(api, track_id, str(exc))
         return value
 
     return wrapper
+
+
+def notify_error(api, track_id, message):
+    api.post(
+        "videos.notify-annotation-tool",
+        data={
+            "type": "videos:tracking-error",
+            "data": {
+                "trackId": str(track_id),
+                "error": {"message": message},
+            },
+        },
+    )
 
 
 def maybe_literal_eval(area):
