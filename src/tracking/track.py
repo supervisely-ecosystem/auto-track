@@ -1724,7 +1724,7 @@ def track(
     sly.logger.debug("track", extra={"context": context, "nn_settings": nn_settings})
 
     track_id = context.get("trackId", None)
-    disappear_enabled = context.get("disappearEnabled", False)
+    disappear_enabled = context.get("detectOffScreen", True)
     for cur_track in g.current_tracks.values():
         if cur_track.track_id == track_id:
             cur_track.disappear_enabled = disappear_enabled
