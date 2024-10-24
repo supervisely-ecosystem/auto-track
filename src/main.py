@@ -47,6 +47,7 @@ def start_tracking_by_detection(request: Request, task: BackgroundTasks):
     context = request.state.context
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    context["trackingByDetection"] = True
     task.add_task(
         track,
         api,
@@ -55,7 +56,6 @@ def start_tracking_by_detection(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
-        detection_enabled=True,
     )
     return {"message": "Track task started."}
 
