@@ -1069,7 +1069,6 @@ class Track:
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
-        threshold = self.nn_settings.get("d")
         threshold = (
             self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
             .get("extra_params", {})
@@ -1104,8 +1103,13 @@ class Track:
                     object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))
                 ):
                     continue
+                this_bbox = label.geometry.to_bbox()
+                costs = utils.iou_distance([this_bbox], detections_boxes)[0]
+                if any([cost < 0.1 for cost in costs]):
+                    continue
                 filtered_indexes.append(idx)
-                detections_boxes.append(label.geometry.to_bbox())
+                detections_boxes.append(this_bbox)
+
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
             cost_matrix = np.where(cost_matrix < threshold, cost_matrix, 1.0)
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
