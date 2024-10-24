@@ -1034,7 +1034,7 @@ class Track:
         return enabled and valid
 
     def is_disappear_enabled(self):
-        valid = self.track.disappear_params.get("enabled", False)
+        valid = self.disappear_params.get("enabled", False)
         enabled = self.disappear_enabled
         return enabled and valid
 
