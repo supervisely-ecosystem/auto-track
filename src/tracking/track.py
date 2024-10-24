@@ -1070,6 +1070,7 @@ class Track:
         unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
         threshhold = 0.2  # Maybe add to UI
+        threshhold = 1 - threshhold
 
         get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
