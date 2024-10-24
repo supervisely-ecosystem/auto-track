@@ -1069,8 +1069,13 @@ class Track:
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
-        threshhold = 0.2  # Maybe add to UI
-        threshhold = 1 - threshhold
+        threshold = self.nn_settings.get("d")
+        threshold = (
+            self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
+            .get("extra_params", {})
+            .get("threshold", 0.5)
+        )
+        threshold = 1 - threshold
 
         get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
@@ -1102,9 +1107,9 @@ class Track:
                 filtered_indexes.append(idx)
                 detections_boxes.append(label.geometry.to_bbox())
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
-            cost_matrix = np.where(cost_matrix < threshhold, cost_matrix, 1.0)
+            cost_matrix = np.where(cost_matrix < threshold, cost_matrix, 1.0)
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
-                utils.linear_assignment(cost_matrix, threshhold)
+                utils.linear_assignment(cost_matrix, threshold)
             )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [
