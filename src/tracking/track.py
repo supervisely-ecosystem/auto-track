@@ -691,6 +691,8 @@ class Track:
         )
 
     def validate_timelines(self):
+        if self.is_detection_enabled():
+            return True
         for timeline in self.timelines:
             for tracklet in timeline.tracklets:
                 for figure in tracklet.last_tracked[1]:
