@@ -576,8 +576,8 @@ class Track:
         cloud_token: str = None,
         cloud_action_id: str = None,
         disappear_params: Dict = None,
-        detection_enabled: bool = False,
-        disappear_enabled: bool = False,
+        detection_enabled: bool = True,
+        disappear_enabled: bool = True,
     ):
         self.track_id = track_id
         self.api = api
@@ -1031,6 +1031,11 @@ class Track:
             .get("enabled", False)
         )
         enabled = enabled and self.detection_enabled
+        return enabled and valid
+
+    def is_disappear_enabled(self):
+        valid = self.track.disappear_params.get("enabled", False)
+        enabled = self.disappear_enabled
         return enabled and valid
 
     def get_detections(self, frame_from: int, frame_to: int):
@@ -1756,6 +1761,7 @@ def track(
         video_id = context["videoId"]
         frame_index = context["frameIndex"]
         frames_count = context["frames"]
+        detection_enabled = context.get("trackByDetection", True)
         cur_track = g.current_tracks.get(track_id, None)
         if cur_track is not None:
             cur_track.append_update(
@@ -1768,6 +1774,7 @@ def track(
             )
             # cur_track.apply_updates()
             cur_track.disappear_params = disappear_params
+            cur_track.detection_enabled = detection_enabled
             return
         else:
             api.logger.info("Track not found. Starting new one", extra={"track_id": track_id})
@@ -1849,7 +1856,7 @@ def track(
     object_ids = list(context["objectIds"])
     frame_index = context["frameIndex"]
     frames_count = context["frames"]
-    detection_enabled = context.get("detectionEnabled", False)
+    detection_enabled = context.get("trackByDetection", True)
     user_id = api.user.get_my_info().id
     # direction = context["direction"]
     with g.tracks_lock:
