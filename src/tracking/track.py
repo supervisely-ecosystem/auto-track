@@ -650,7 +650,10 @@ class Track:
 
     def _init_timelines(self):
         if len(self.object_ids) == 0:
-            self.logger.debug("Trying to init timelines with empty object_ids")
+            if not self.is_detection_enabled():
+                self.logger.debug("Trying to init timelines with empty object_ids")
+                return
+            self.init_timelines_from_detections(self.frame_ranges[0][0], self.frame_ranges[0][0])
             return
         # Get common data for all timelines to avoid multiple requests
         # Figures
