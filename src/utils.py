@@ -222,16 +222,19 @@ def send_error_data(func):
 
 
 def notify_error(api, track_id, message):
-    api.post(
-        "videos.notify-annotation-tool",
-        data={
-            "type": "videos:tracking-error",
-            "data": {
-                "trackId": str(track_id),
-                "error": {"message": message},
+    try:
+        api.post(
+            "videos.notify-annotation-tool",
+            data={
+                "type": "videos:tracking-error",
+                "data": {
+                    "trackId": str(track_id),
+                    "error": {"message": message},
+                },
             },
-        },
-    )
+        )
+    except Exception as exc:
+        api.logger.error("Failed to notify error:", exc_info=True)
 
 
 def maybe_literal_eval(area):
