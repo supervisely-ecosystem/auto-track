@@ -54,6 +54,8 @@ class Tracklet:
     def __init__(
         self, timeline: "Timeline", start_frame: int, end_frame: int, figures: List[FigureInfo]
     ):
+        if len(figures) == 0:
+            raise ValueError("Tracklet must have at least one figure")
         self.timeline = timeline
         self.start_frame = start_frame
         self.end_frame = end_frame
@@ -329,6 +331,9 @@ class Timeline:
             frame_index: frame_figures,
         }
         self.key_figures.update(key_frame_figures)
+        if len(frame_figures) == 0:
+            self.track.logger.warning("No figures found for object on object_changed", extra={**self.log_data(), "frame_index": frame_index, frame_index: self.object_id})
+            return
 
         for i, tracklet in enumerate(self.tracklets):
             if frame_index == tracklet.start_frame:
@@ -426,7 +431,7 @@ class Timeline:
         )
         key_frame_figures = find_key_figures(frame_figures)
         self.key_figures.update(key_frame_figures)
-        if len(key_frame_figures.get(frame_index, None)) == 0:
+        if len(key_frame_figures.get(frame_index, [])) == 0:
             del self.key_figures[frame_index]
 
         tracklets_to_remove = []
