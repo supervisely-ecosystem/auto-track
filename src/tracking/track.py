@@ -576,8 +576,8 @@ class Track:
         cloud_token: str = None,
         cloud_action_id: str = None,
         disappear_params: Dict = None,
-        detection_enabled: bool = False,
-        disappear_enabled: bool = False,
+        detection_enabled: bool = True,
+        disappear_enabled: bool = True,
     ):
         self.track_id = track_id
         self.api = api
@@ -650,7 +650,10 @@ class Track:
 
     def _init_timelines(self):
         if len(self.object_ids) == 0:
-            self.logger.debug("Trying to init timelines with empty object_ids")
+            if not self.is_detection_enabled():
+                self.logger.debug("Trying to init timelines with empty object_ids")
+                return
+            self.init_timelines_from_detections(self.frame_ranges[0][0], self.frame_ranges[0][0])
             return
         # Get common data for all timelines to avoid multiple requests
         # Figures
@@ -691,6 +694,8 @@ class Track:
         )
 
     def validate_timelines(self):
+        if self.is_detection_enabled():
+            return True
         for timeline in self.timelines:
             for tracklet in timeline.tracklets:
                 for figure in tracklet.last_tracked[1]:
@@ -1033,6 +1038,11 @@ class Track:
         enabled = enabled and self.detection_enabled
         return enabled and valid
 
+    def is_disappear_enabled(self):
+        valid = self.disappear_params.get("enabled", False)
+        enabled = self.disappear_enabled
+        return enabled and valid
+
     def get_detections(self, frame_from: int, frame_to: int):
         if not self.is_detection_enabled():
             return False
@@ -1062,7 +1072,12 @@ class Track:
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
         unmatched_detections: List[sly.Label] = []
         unmatched_detections_frame = None
-        threshhold = 0.2  # Maybe add to UI
+        threshold = (
+            self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
+            .get("extra_params", {})
+            .get("threshold", 0.5)
+        )
+        threshold = 1 - threshold
 
         get_detections_time = TinyTimer()
         detections: List[sly.Annotation] = self.get_detections(
@@ -1091,12 +1106,17 @@ class Track:
                     object_class.geometry_type, (sly.AnyGeometry, type(label.geometry))
                 ):
                     continue
+                this_bbox = label.geometry.to_bbox()
+                costs = utils.iou_distance([this_bbox], detections_boxes)[0]
+                if any([cost < 0.1 for cost in costs]):
+                    continue
                 filtered_indexes.append(idx)
-                detections_boxes.append(label.geometry.to_bbox())
+                detections_boxes.append(this_bbox)
+
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
-            cost_matrix = np.where(cost_matrix < threshhold, cost_matrix, 1.0)
+            cost_matrix = np.where(cost_matrix < threshold, cost_matrix, 1.0)
             matches, unmatched_detections_indexes, unmatched_prediction_indexes = (
-                utils.linear_assignment(cost_matrix, threshhold)
+                utils.linear_assignment(cost_matrix, threshold)
             )
             if len(unmatched_detections_indexes) > 0:
                 unmatched_detections = [
@@ -1756,6 +1776,7 @@ def track(
         video_id = context["videoId"]
         frame_index = context["frameIndex"]
         frames_count = context["frames"]
+        detection_enabled = context.get("trackByDetection", True)
         cur_track = g.current_tracks.get(track_id, None)
         if cur_track is not None:
             cur_track.append_update(
@@ -1768,6 +1789,7 @@ def track(
             )
             # cur_track.apply_updates()
             cur_track.disappear_params = disappear_params
+            cur_track.detection_enabled = detection_enabled
             return
         else:
             api.logger.info("Track not found. Starting new one", extra={"track_id": track_id})
@@ -1849,7 +1871,7 @@ def track(
     object_ids = list(context["objectIds"])
     frame_index = context["frameIndex"]
     frames_count = context["frames"]
-    detection_enabled = context.get("detectionEnabled", False)
+    detection_enabled = context.get("trackByDetection", True)
     user_id = api.user.get_my_info().id
     # direction = context["direction"]
     with g.tracks_lock:
