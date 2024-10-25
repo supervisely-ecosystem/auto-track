@@ -125,6 +125,11 @@ def available_geometries(request: Request):
         else:
             if settings["task_id"]:
                 available.append(geometry_name)
+    if all(
+        geom in available
+        for geom in [g.GEOMETRY_NAME.POINT, g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.SMARTTOOL]
+    ):
+        available.append("smarttool-track")
     return available
 
 
