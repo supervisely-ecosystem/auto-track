@@ -1,22 +1,21 @@
-from functools import partial
-import cv2
-import numpy as np
 from typing import Dict, List
 import uuid
-from scipy.ndimage import distance_transform_edt
-from skimage.transform import AffineTransform, warp
 
-from supervisely.api.entity_annotation.figure_api import FigureInfo
+import cv2
+import numpy as np
+from skimage.transform import AffineTransform, warp
+from scipy.ndimage import distance_transform_edt
+
 import supervisely as sly
+from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely.api.module_api import ApiField
-from supervisely import logger
 from supervisely.api.video.video_api import VideoInfo
+from supervisely import logger
 
 import src.utils as utils
-from scipy.ndimage import distance_transform_edt
 
 
-INTERPOLATION_LIMIT = 200
+INTERPOLATION_FRAMES_LIMIT = 200
 
 
 def interpolate_box(
@@ -97,7 +96,6 @@ def morph_masks_gen(mask1, mask2, N):
     bbox1_cropped = bbox1 - np.array([x_min_all, y_min_all, x_min_all, y_min_all])
     bbox2_cropped = bbox2 - np.array([x_min_all, y_min_all, x_min_all, y_min_all])
 
-    inner_masks = []
     for n in range(1, N + 1):
         t = n / (N + 1)
         # Interpolate bounding boxes
@@ -151,7 +149,6 @@ def get_affine_transform(bbox_from, bbox_to):
     Returns:
     - transform: skimage.transform.AffineTransform object
     """
-    # Coordinates of the corners of the bounding boxes
     src = np.array(
         [
             [bbox_from[0], bbox_from[1]],  # Top-left
@@ -194,11 +191,19 @@ def interpolate_bitmap(
     return created_geometries
 
 
-def simplify_polygon(polygon: sly.Polygon, epsilon: float = 1) -> sly.Polygon:
-    points = cv2.approxPolyDP(
+def simplify_polygon(polygon: sly.Polygon, epsilon: float = 5) -> sly.Polygon:
+    exterior = cv2.approxPolyDP(
         polygon.exterior_np.reshape((-1, 1, 2)), epsilon=epsilon, closed=True
     ).reshape(-1, 2)
-    return sly.Polygon(exterior=[sly.PointLocation(x, y) for x, y in points])
+    interior = []
+    if polygon.interior:
+        interior = cv2.approxPolyDP(
+            polygon.interior_np.reshape((-1, 1, 2)), epsilon=epsilon, closed=True
+        ).reshape(-1, 2)
+    return sly.Polygon(
+        exterior=[sly.PointLocation(x, y) for x, y in exterior],
+        interior=[sly.PointLocation(x, y) for x, y in interior],
+    )
 
 
 def interpolate_polygon(
@@ -278,7 +283,7 @@ def interpolate_frames(api: sly.Api, context: Dict):
     dataset_id = video_info.dataset_id
     figures = api.video.figure.get_by_ids(dataset_id, figure_ids)
     from_frame = min([figure.frame_index for figure in figures])
-    end_frame = min(from_frame + INTERPOLATION_LIMIT, video_info.frames_count)
+    end_frame = min(from_frame + INTERPOLATION_FRAMES_LIMIT, video_info.frames_count)
     api.video.notify_progress(
         track_id, video_id, frame_start=from_frame, frame_end=from_frame + 1, current=0, total=1
     )
@@ -309,6 +314,9 @@ def interpolate_frames(api: sly.Api, context: Dict):
         next_figure = min(this_object_figures, key=lambda fig: fig.frame_index)
         next_figures.append(next_figure)
 
+    if len(next_figures) == 0:
+        logger.warning("No next figures found")
+        return
     end_frame = max([f.frame_index for f in next_figures])
     total = 0
     for this_figure, next_figure in zip(figures, next_figures):

@@ -1,6 +1,5 @@
-import ast
-from typing import List, Dict, Literal, NamedTuple, Set, Tuple
-from concurrent.futures import ThreadPoolExecutor
+from typing import List, Dict, NamedTuple, Set, Tuple
+from concurrent.futures import ThreadPoolExecutor, Future
 from logging import Logger
 import queue
 import threading
@@ -8,7 +7,6 @@ import time
 import uuid
 
 import numpy as np
-import requests
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely.api.module_api import ApiField
@@ -332,7 +330,10 @@ class Timeline:
         }
         self.key_figures.update(key_frame_figures)
         if len(frame_figures) == 0:
-            self.track.logger.warning("No figures found for object on object_changed", extra={**self.log_data(), "frame_index": frame_index, frame_index: self.object_id})
+            self.track.logger.warning(
+                "No figures found for object on object_changed",
+                extra={**self.log_data(), "frame_index": frame_index, frame_index: self.object_id},
+            )
             return
 
         for i, tracklet in enumerate(self.tracklets):
@@ -906,7 +907,11 @@ class Track:
         run_geometry(*args)[i][j] is the prediction of j-th figure on the i-th frame.
         """
         self.logger.debug("Tracking geometry type %s", geometry_type, extra=self.logger_extra)
-        validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
+        try:
+            validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
+        except Exception as e:
+            utils.notify_error(self.api, self.track_id, str(e))
+            return None
 
         frames_count = frame_to - frame_from
         try:
@@ -944,10 +949,11 @@ class Track:
                 )
 
         except Exception as e:
-            cls, exc_str = utils.parse_exception(
+            _, exc_str = utils.parse_exception(
                 e, {"geometry": geometry_type, "frames": [frame_from, frame_to]}
             )
-            raise cls(exc_str) from None
+            utils.notify_error(self.api, self.track_id, exc_str)
+            return None
         result = []
         for i, frame_predictions in enumerate(predictions):
             result.append([])
@@ -986,14 +992,9 @@ class Track:
 
         geom_types = list(figures_by_type.keys())
         with ThreadPoolExecutor(len(geom_types)) as executor:
-            tasks_by_geom_type = {}
+            tasks_by_geom_type: Dict[str, Future] = {}
             for geom_type in geom_types:
                 if geom_type == g.GEOMETRY_NAME.SMARTTOOL:
-                    continue
-                try:
-                    validate_nn_settings_for_geometry(self.nn_settings, geom_type)
-                except ValueError:
-                    self.logger.warning("No settings for geometry type %s", geom_type)
                     continue
                 task = executor.submit(
                     self.run_geometry,
@@ -1003,26 +1004,23 @@ class Track:
                     frame_to=frame_to,
                 )
                 tasks_by_geom_type[geom_type] = task
-            results_by_geom_type = {
-                geom_type: task.result() for geom_type, task in tasks_by_geom_type.items()
-            }
-            results_by_geom_type: Dict[str, List[List[FigureInfo]]]
+            results_by_geom_type: Dict[str, List[List[FigureInfo]]] = {}
+            for geom_type, task in tasks_by_geom_type.items():
+                results_by_geom_type[geom_type] = task.result()
         if g.GEOMETRY_NAME.SMARTTOOL in geom_types:
-            try:
-                validate_nn_settings_for_geometry(self.nn_settings, g.GEOMETRY_NAME.SMARTTOOL)
-            except ValueError:
-                self.logger.warning("No settings for geometry type smarttool")
+
             results_by_geom_type[g.GEOMETRY_NAME.SMARTTOOL] = self.run_geometry(
                 geometry_type=g.GEOMETRY_NAME.SMARTTOOL,
                 figures=figures_by_type[g.GEOMETRY_NAME.SMARTTOOL],
                 frame_from=frame_from,
                 frame_to=frame_to,
             )
-
         results = [
             [[] for _ in range(frame_to - frame_from)] for _ in range(len(timelines_figures))
         ]
         for geom_type, geom_predictions in results_by_geom_type.items():
+            if geom_predictions is None:
+                continue
             for frame_index, frame_predictions in enumerate(geom_predictions):
                 for figure_index, predicted_figure in enumerate(frame_predictions):
                     timeline_index = figures_by_type_index_to_timeline_index[geom_type][

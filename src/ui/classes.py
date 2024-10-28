@@ -15,7 +15,6 @@ from supervisely.app.widgets import (
     Dialog,
     Card,
     Flexbox,
-    Text,
     Editor,
 )
 from supervisely import logger
