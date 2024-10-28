@@ -314,6 +314,9 @@ def interpolate_frames(api: sly.Api, context: Dict):
         next_figure = min(this_object_figures, key=lambda fig: fig.frame_index)
         next_figures.append(next_figure)
 
+    if len(next_figures) == 0:
+        logger.warning("No next figures found")
+        return
     end_frame = max([f.frame_index for f in next_figures])
     total = 0
     for this_figure, next_figure in zip(figures, next_figures):
