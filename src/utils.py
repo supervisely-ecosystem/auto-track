@@ -237,6 +237,22 @@ def notify_error(api, track_id, message):
         api.logger.error("Failed to notify error:", exc_info=True)
 
 
+def notify_warning(api, track_id, message):
+    try:
+        api.post(
+            "videos.notify-annotation-tool",
+            data={
+                "type": "videos:tracking-warning",
+                "data": {
+                    "trackId": str(track_id),
+                    "message": message,
+                },
+            },
+        )
+    except Exception as exc:
+        api.logger.error("Failed to notify warning:", exc_info=True)
+
+
 def maybe_literal_eval(area):
     if isinstance(area, str):
         return ast.literal_eval(area)
