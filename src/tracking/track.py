@@ -1,5 +1,4 @@
-import ast
-from typing import List, Dict, Literal, NamedTuple, Set, Tuple
+from typing import List, Dict, NamedTuple, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor, Future
 from logging import Logger
 import queue
@@ -8,7 +7,6 @@ import time
 import uuid
 
 import numpy as np
-import requests
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely.api.module_api import ApiField
@@ -1021,6 +1019,8 @@ class Track:
             [[] for _ in range(frame_to - frame_from)] for _ in range(len(timelines_figures))
         ]
         for geom_type, geom_predictions in results_by_geom_type.items():
+            if geom_predictions is None:
+                continue
             for frame_index, frame_predictions in enumerate(geom_predictions):
                 for figure_index, predicted_figure in enumerate(frame_predictions):
                     timeline_index = figures_by_type_index_to_timeline_index[geom_type][
