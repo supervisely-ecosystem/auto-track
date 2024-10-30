@@ -239,8 +239,8 @@ def interpolate_line(
     if len(this_geom.exterior) != len(dest_geom.exterior):
         logger.warning("Cannot interpolate lines with different number of points")
         return []
-    for i in range(n_frames):
-        t = i / n_frames
+    for i in range(1, n_frames + 1):
+        t = i / (n_frames + 1)
         points = []
         for p1, p2 in zip(this_geom.exterior, dest_geom.exterior):
             x = int(p1.row * (1 - t) + p2.row * t)
@@ -261,8 +261,8 @@ def interpolate_point(
     logger.debug("Interpolating point")
     n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Point] = []
-    for i in range(n_frames):
-        t = i / n_frames
+    for i in range(1, n_frames + 1):
+        t = i / (n_frames + 1)
         x = int(this_geom.row * (1 - t) + dest_geom.row * t)
         y = int(this_geom.col * (1 - t) + dest_geom.col * t)
         created_geometries.append(sly.Point(row=x, col=y))
