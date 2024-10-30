@@ -198,13 +198,13 @@ def interpolate_bitmap(
     from_frame: int,
     to_frame: int,
     video_info: VideoInfo,
-) -> Generator[List[sly.Bitmap], None, None]:
+) -> Generator[sly.Bitmap, None, None]:
     logger.debug("Interpolating bitmap")
     n_frames = to_frame - from_frame - 1
     this_mask = this_geom.get_mask((video_info.frame_height, video_info.frame_width))
     next_mask = dest_geom.get_mask((video_info.frame_height, video_info.frame_width))
     for mask in _morph_masks_gen(this_mask, next_mask, n_frames):
-        yield [sly.Bitmap(mask)]
+        yield sly.Bitmap(mask)
     logger.debug("Done interpolating bitmap")
 
 
@@ -222,7 +222,7 @@ def interpolate_polygon(
     for mask in _morph_masks_gen(this_mask, next_mask, n_frames):
         polys = sly.Bitmap(mask).to_contours()
         polys = [_simplify_polygon(poly) for poly in polys]
-        yield [polys]
+        yield polys
     logger.debug("Done interpolating polygon")
 
 
@@ -478,7 +478,7 @@ class Interpolator:
                     to_frame=dest_figure.frame_index,
                     video_info=self.video_info,
                 ):
-                    cum_batch.extend(batch)
+                    cum_batch.append(batch)
                     if len(cum_batch) < MIN_GEOMETRIES_BATCH_SIZE:
                         continue
                     frame_indexes = list(range(frame_index, frame_index + len(cum_batch)))
