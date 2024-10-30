@@ -470,7 +470,13 @@ class Interpolator:
             try:
                 frame_index = this_figure.frame_index + 1
                 cum_batch = []
-                for batch in interpolator_func():
+                for batch in interpolator_func(
+                    this_geometry,
+                    dest_geometry,
+                    from_frame=this_figure.frame_index,
+                    to_frame=dest_figure.frame_index,
+                    video_info=self.video_info,
+                ):
                     cum_batch.extend(batch)
                     if len(cum_batch) < MIN_GEOMETRIES_BATCH_SIZE:
                         continue
