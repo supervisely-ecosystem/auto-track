@@ -321,6 +321,15 @@ class Interpolator:
 
     def notify_progress(self):
         try:
+            logger.debug(
+                f"Notifying video tool. frames: [{self.frame_start}, {self.frame_end}], progress: {self.progress_current}/{self.progress_total}",
+                extra={
+                    "progress": self.progress_current,
+                    "total": self.progress_total,
+                    "frame_start": self.frame_start,
+                    "frame_end": self.frame_end,
+                },
+            )
             self.api.video.notify_progress(
                 self.track_id,
                 self.video_id,
