@@ -188,6 +188,7 @@ def interpolate_box(
             target[0] - resized.center.row, target[1] - resized.center.col
         )
         created_geometries.append(moved)
+    logger.debug("Done interpolating box")
     return created_geometries
 
 
@@ -425,7 +426,7 @@ class Interpolator:
             self._upload(object_id, batch, frame_indexes)
         except Exception as e:
             message = f"Unable to upload interpolations: {str(e)}"
-            logger.warning(message, extra=self.log_extra)
+            logger.warning(message, exc_info=True, extra=self.log_extra)
             self.send_warning(message)
 
     def interpolate_frames(self):
@@ -497,7 +498,7 @@ class Interpolator:
                 self.progress_current += frames_n
             except Exception as e:
                 msg = f"Unexpected Error during interpolation: {str(e)}"
-                logger.warning(msg, extra=self.log_extra)
+                logger.warning(msg, exc_info=True, extra=self.log_extra)
                 self.send_warning(msg)
                 this_figure_progress = before_this_figure_progress - self.progress_current
                 self.progress_current += frames_n - this_figure_progress
