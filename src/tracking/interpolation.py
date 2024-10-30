@@ -486,3 +486,8 @@ class Interpolator:
                 self.notify_progress()
         self.progress_current = self.progress_total
         self.notify_progress()
+
+
+@utils.send_error_data
+def interpolate_frames(api, context):
+    Interpolator(api, context).interpolate_frames()
