@@ -342,7 +342,7 @@ class Interpolator:
             logger.warning("Unable to notify video tool", exc_info=True)
 
     def send_warning(self, message):
-        utils.notify_warning(self.api, self.track_id, message)
+        utils.notify_warning(self.api, self.track_id, self.video_id, message)
 
     def filter_figures(
         self, figures, dest_figures, condition

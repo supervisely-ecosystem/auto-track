@@ -237,13 +237,14 @@ def notify_error(api, track_id, message):
         api.logger.error("Failed to notify error:", exc_info=True)
 
 
-def notify_warning(api, track_id, message):
+def notify_warning(api, track_id, video_id, message):
     try:
         api.post(
             "videos.notify-annotation-tool",
             data={
                 "type": "videos:tracking-warning",
                 "data": {
+                    "videoId": str(video_id),
                     "trackId": str(track_id),
                     "message": message,
                 },

@@ -911,7 +911,7 @@ class Track:
             validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
         except Exception as e:
             message = f"Invalid settings for geometry type {geometry_type}, this geometry will not be tracked."
-            utils.notify_warning(self.api, self.track_id, message)
+            utils.notify_warning(self.api, self.track_id, self.video_id, message)
             return None
 
         frames_count = frame_to - frame_from
@@ -954,7 +954,7 @@ class Track:
                 e, {"geometry": geometry_type, "frames": [frame_from, frame_to]}
             )
             message = f"Error during tracking: {exc_str}"
-            utils.notify_warning(self.api, self.track_id, message)
+            utils.notify_warning(self.api, self.track_id, self.video_id, message)
             return None
         result = []
         for i, frame_predictions in enumerate(predictions):
@@ -1441,6 +1441,7 @@ class Track:
             utils.notify_warning(
                 self.api,
                 self.track_id,
+                self.video_id,
                 f"Model settings are missing for some geometries, such objects will be skipped. Skipping geometries: {', '.join(skipping_strs)}",
             )
 
