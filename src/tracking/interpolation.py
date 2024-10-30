@@ -377,11 +377,15 @@ class Interpolator:
             this_object_figures = [
                 fig
                 for fig in all_figures
-                if fig.object_id == object_id and fig.frame_index > this_figure.frame_index + 1
+                if fig.object_id == object_id and fig.frame_index > this_figure.frame_index
             ]
             if len(this_object_figures) == 0:
                 next_figures.append(None)
+                continue
             next_figure = min(this_object_figures, key=lambda fig: fig.frame_index)
+            if next_figure.frame_index - this_figure.frame_index == 1:
+                next_figures.append(None)
+                continue
             next_figures.append(next_figure)
         return next_figures
 
@@ -454,6 +458,7 @@ class Interpolator:
             logger.info(msg, extra=self.log_extra)
             utils.notify_error(self.api, self.track_id, msg)
             return
+        self.notify_progress()
         for this_figure, dest_figure in zip(figures, dest_figures):
             # interpolate between this_figure and next_figure
             this_geometry = sly.deserialize_geometry(
