@@ -334,6 +334,19 @@ class Interpolator:
     def send_warning(self, message):
         utils.notify_warning(self.api, self.track_id, message)
 
+    def filter_figures(
+        self, figures, dest_figures, condition
+    ) -> Tuple[List[FigureInfo], List[FigureInfo]]:
+        return tuple(
+            zip(
+                *[
+                    (figure, dest_figure)
+                    for figure, dest_figure in zip(figures, dest_figures)
+                    if condition((figure, dest_figure))
+                ]
+            )
+        )
+
     def find_destination_figures(self) -> List[FigureInfo]:
         all_figures: List[FigureInfo] = self.api.video.figure.get_list(
             dataset_id=self.dataset_id,
@@ -365,7 +378,7 @@ class Interpolator:
     def filter_destination_figures(
         self, dest_figures: List[FigureInfo]
     ) -> Tuple[List[FigureInfo], List[FigureInfo]]:
-        figures, dest_figures = filter_figures(
+        figures, dest_figures = self.filter_figures(
             self.figures, dest_figures, condition=lambda x: x[1] is not None
         )
         if len(figures) < len(self.figures):
@@ -374,7 +387,7 @@ class Interpolator:
             self.send_warning(msg)
 
         original_figures_len = len(figures)
-        figures, dest_figures = filter_figures(
+        figures, dest_figures = self.filter_figures(
             figures, dest_figures, condition=lambda x: is_geom_type_supported(x[0])
         )
         if len(figures) < original_figures_len:
