@@ -366,7 +366,7 @@ class Interpolator:
                     "operator": "in",
                     "value": list(set([figure.object_id for figure in self.figures])),
                 },
-                {"field": "startFrame", "operator": ">", "value": self.frame_start + 1},
+                {"field": "startFrame", "operator": ">", "value": self.frame_start},
                 {"field": "endFrame", "operator": "<=", "value": self.frame_end},
             ],
         )
