@@ -485,6 +485,7 @@ class Interpolator:
                     frame_index = frame_indexes[-1] + 1
                     self.upload(this_figure.object_id, cum_batch, frame_indexes)
                     self.progress_current += len(cum_batch)
+                    cum_batch = []
                     self.notify_progress()
                 if len(cum_batch) > 0:
                     frame_indexes = list(range(frame_index, frame_index + len(cum_batch)))
