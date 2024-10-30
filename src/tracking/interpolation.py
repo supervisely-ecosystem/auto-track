@@ -1,5 +1,4 @@
-from ast import Tuple
-from typing import Callable, Dict, Generator, List
+from typing import Dict, Generator, List, Tuple
 import uuid
 
 import cv2
@@ -198,7 +197,7 @@ def interpolate_bitmap(
     from_frame: int,
     to_frame: int,
     video_info: VideoInfo,
-) -> Generator[List[sly.Bitmap]]:
+) -> Generator[List[sly.Bitmap], None, None]:
     logger.debug("Interpolating bitmap")
     n_frames = to_frame - from_frame - 1
     this_mask = this_geom.get_mask((video_info.frame_height, video_info.frame_width))
@@ -214,7 +213,7 @@ def interpolate_polygon(
     from_frame: int,
     to_frame: int,
     video_info: VideoInfo,
-) -> Generator[List[sly.Polygon]]:
+) -> Generator[List[List[sly.Polygon]], None, None]:
     logger.debug("Interpolating polygon")
     n_frames = to_frame - from_frame - 1
     this_mask = this_geom.get_mask((video_info.frame_height, video_info.frame_width))
