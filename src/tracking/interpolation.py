@@ -347,15 +347,13 @@ class Interpolator:
     def filter_figures(
         self, figures, dest_figures, condition
     ) -> Tuple[List[FigureInfo], List[FigureInfo]]:
-        return tuple(
-            zip(
-                *[
-                    (figure, dest_figure)
-                    for figure, dest_figure in zip(figures, dest_figures)
-                    if condition((figure, dest_figure))
-                ]
-            )
-        )
+        filtered_figures = []
+        filtered_dest_figures = []
+        for figure, dest_figure in zip(figures, dest_figures):
+            if condition((figure, dest_figure)):
+                filtered_figures.append(figure)
+                filtered_dest_figures.append(dest_figure)
+        return filtered_figures, filtered_dest_figures
 
     def find_destination_figures(self) -> List[FigureInfo]:
         all_figures: List[FigureInfo] = self.api.video.figure.get_list(
