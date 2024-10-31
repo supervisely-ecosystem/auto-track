@@ -447,6 +447,11 @@ class Interpolator:
         self.notify_progress()
         dest_figures: List[FigureInfo] = self.find_destination_figures()
         figures, dest_figures = self.filter_destination_figures(dest_figures)
+        if len(figures) == 0:
+            msg = "No valid figures to interpolate"
+            logger.info(msg, extra=self.log_extra)
+            utils.notify_error(self.api, self.track_id, msg)
+            return
         self.frame_end = max([figure.frame_index for figure in dest_figures]) - 1
         self.progress_total = sum(
             [
@@ -454,11 +459,6 @@ class Interpolator:
                 for this_figure, dest_figure in zip(figures, dest_figures)
             ]
         )
-        if len(figures) == 0:
-            msg = "No valid figures to interpolate"
-            logger.info(msg, extra=self.log_extra)
-            utils.notify_error(self.api, self.track_id, msg)
-            return
         self.notify_progress()
         for this_figure, dest_figure in zip(figures, dest_figures):
             # interpolate between this_figure and next_figure
