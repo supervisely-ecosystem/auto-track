@@ -146,9 +146,12 @@ def _simplify_polygon(polygon: sly.Polygon, epsilon: float = 5) -> sly.Polygon:
     ).reshape(-1, 2)
     interior = []
     if polygon.interior:
-        interior = cv2.approxPolyDP(
-            polygon.interior_np.reshape((-1, 1, 2)), epsilon=epsilon, closed=True
-        ).reshape(-1, 2)
+        interior = [
+            cv2.approxPolyDP(points.reshape((-1, 1, 2)), epsilon=epsilon, closed=True).reshape(
+                -1, 2
+            )
+            for points in polygon.interior_np
+        ]
     return sly.Polygon(
         exterior=[sly.PointLocation(x, y) for x, y in exterior],
         interior=[sly.PointLocation(x, y) for x, y in interior],
