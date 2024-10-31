@@ -213,15 +213,16 @@ def send_error_data(func):
             api: sly.Api = args[0]
             context = args[1]
             track_id = context.get("trackId", None)
+            video_id = context.get("videoId", None)
             api.logger.error("An error occured:", exc_info=True)
 
-            notify_error(api, track_id, str(exc))
+            notify_error(api, track_id, video_id, str(exc))
         return value
 
     return wrapper
 
 
-def notify_error(api, track_id, message):
+def notify_error(api, track_id, video_id, message):
     try:
         api.post(
             "videos.notify-annotation-tool",
@@ -229,6 +230,7 @@ def notify_error(api, track_id, message):
                 "type": "videos:tracking-error",
                 "data": {
                     "trackId": str(track_id),
+                    "videoId": str(video_id),
                     "error": {"message": message},
                 },
             },

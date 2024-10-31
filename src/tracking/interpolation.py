@@ -441,7 +441,7 @@ class Interpolator:
         if len(figures) == 0:
             msg = "No valid figures to interpolate"
             logger.info(msg, extra=self.log_extra)
-            utils.notify_error(self.api, self.track_id, msg)
+            utils.notify_error(self.api, self.track_id, self.video_id, msg)
             return
         self.frame_end = max([figure.frame_index for figure in dest_figures]) - 1
         self.progress_total = sum(
