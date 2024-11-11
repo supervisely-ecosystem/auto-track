@@ -166,19 +166,16 @@ def unsupported_geometry_interpolator(this_geom: Geometry, **kwargs):
 def interpolate_box(
     this_geom: sly.Rectangle,
     dest_geom: sly.Rectangle,
-    from_frame: int,
-    to_frame: int,
+    frames_n: int,
     video_info: VideoInfo,
 ) -> List[sly.Rectangle]:
     logger.debug("Interpolating box")
-    n_frames = to_frame - from_frame
-    rowdelta = (dest_geom.height - this_geom.height) / (n_frames)
-    coldelta = (dest_geom.width - this_geom.width) / (n_frames)
-    rowshift = (dest_geom.center.row - this_geom.center.row) / (n_frames)
-    colshift = (dest_geom.center.col - this_geom.center.col) / (n_frames)
+    rowdelta = (dest_geom.height - this_geom.height) / (frames_n + 1)
+    coldelta = (dest_geom.width - this_geom.width) / (frames_n + 1)
+    rowshift = (dest_geom.center.row - this_geom.center.row) / (frames_n + 1)
+    colshift = (dest_geom.center.col - this_geom.center.col) / (frames_n + 1)
     created_geometries: List[sly.AnyGeometry] = []
-    for frame_index in range(from_frame + 1, to_frame):
-        i = frame_index - from_frame
+    for i in range(1, frames_n+1):
         resized: sly.Rectangle = this_geom.resize(
             in_size=(video_info.frame_height, video_info.frame_width),
             out_size=(
@@ -198,15 +195,13 @@ def interpolate_box(
 def interpolate_bitmap(
     this_geom: sly.Bitmap,
     dest_geom: sly.Bitmap,
-    from_frame: int,
-    to_frame: int,
+    frames_n: int,
     video_info: VideoInfo,
 ) -> Generator[sly.Bitmap, None, None]:
     logger.debug("Interpolating bitmap")
-    n_frames = to_frame - from_frame - 1
     this_mask = this_geom.get_mask((video_info.frame_height, video_info.frame_width))
     next_mask = dest_geom.get_mask((video_info.frame_height, video_info.frame_width))
-    for mask in _morph_masks_gen(this_mask, next_mask, n_frames):
+    for mask in _morph_masks_gen(this_mask, next_mask, frames_n):
         yield sly.Bitmap(mask)
     logger.debug("Done interpolating bitmap")
 
@@ -214,15 +209,13 @@ def interpolate_bitmap(
 def interpolate_polygon(
     this_geom: sly.Polygon,
     dest_geom: sly.Polygon,
-    from_frame: int,
-    to_frame: int,
+    frames_n: int,
     video_info: VideoInfo,
 ) -> Generator[List[List[sly.Polygon]], None, None]:
     logger.debug("Interpolating polygon")
-    n_frames = to_frame - from_frame - 1
     this_mask = this_geom.get_mask((video_info.frame_height, video_info.frame_width))
     next_mask = dest_geom.get_mask((video_info.frame_height, video_info.frame_width))
-    for mask in _morph_masks_gen(this_mask, next_mask, n_frames):
+    for mask in _morph_masks_gen(this_mask, next_mask, frames_n):
         polys = sly.Bitmap(mask).to_contours()
         polys = [_simplify_polygon(poly) for poly in polys]
         yield polys
@@ -232,18 +225,16 @@ def interpolate_polygon(
 def interpolate_line(
     this_geom: sly.Polyline,
     dest_geom: sly.Polyline,
-    from_frame: int,
-    to_frame: int,
+    frames_n: int,
     video_info: VideoInfo,
 ) -> List[sly.Polyline]:
     logger.debug("Interpolating line")
-    n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Polyline] = []
     if len(this_geom.exterior) != len(dest_geom.exterior):
         logger.warning("Cannot interpolate lines with different number of points")
         return []
-    for i in range(1, n_frames + 1):
-        t = i / (n_frames + 1)
+    for i in range(1, frames_n + 1):
+        t = i / (frames_n + 1)
         points = []
         for p1, p2 in zip(this_geom.exterior, dest_geom.exterior):
             x = int(p1.row * (1 - t) + p2.row * t)
@@ -257,15 +248,13 @@ def interpolate_line(
 def interpolate_point(
     this_geom: sly.Point,
     dest_geom: sly.Point,
-    from_frame: int,
-    to_frame: int,
+    frames_n: int,
     video_info: VideoInfo,
 ) -> List[sly.Point]:
     logger.debug("Interpolating point")
-    n_frames = to_frame - from_frame - 1
     created_geometries: List[sly.Point] = []
-    for i in range(1, n_frames + 1):
-        t = i / (n_frames + 1)
+    for i in range(1, frames_n + 1):
+        t = i / (frames_n + 1)
         x = int(this_geom.row * (1 - t) + dest_geom.row * t)
         y = int(this_geom.col * (1 - t) + dest_geom.col * t)
         created_geometries.append(sly.Point(row=x, col=y))
@@ -315,9 +304,7 @@ class Interpolator:
         self.dataset_id = self.video_info.dataset_id
         self.figures = api.video.figure.get_by_ids(self.dataset_id, self.figure_ids)
         self.frame_start = min([figure.frame_index for figure in self.figures])
-        self.frame_end = min(
-            self.frame_start + self.INTERPOLATION_FRAMES_LIMIT, self.video_info.frames_count
-        )
+        self.frame_end = self.frame_start
 
         self.progress_total = 1
         self.progress_current = 0
@@ -349,7 +336,7 @@ class Interpolator:
                 filtered_dest_figures.append(dest_figure)
         return filtered_figures, filtered_dest_figures
 
-    def find_destination_figures(self) -> List[FigureInfo]:
+    def find_destination_figures(self) -> List[Tuple[FigureInfo, FigureInfo]]:
         all_figures: List[FigureInfo] = self.api.video.figure.get_list(
             dataset_id=self.dataset_id,
             filters=[
@@ -358,34 +345,50 @@ class Interpolator:
                     "operator": "in",
                     "value": list(set([figure.object_id for figure in self.figures])),
                 },
-                {"field": "startFrame", "operator": ">", "value": self.frame_start},
-                {"field": "endFrame", "operator": "<=", "value": self.frame_end},
+                {
+                    "field": "startFrame",
+                    "operator": ">=",
+                    "value": max(0, self.frame_start - self.INTERPOLATION_FRAMES_LIMIT),
+                },
+                {
+                    "field": "endFrame",
+                    "operator": "<=",
+                    "value": min(
+                        self.frame_end + self.INTERPOLATION_FRAMES_LIMIT,
+                        self.video_info.frames_count - 1,
+                    ),
+                },
             ],
         )
-
-        next_figures = []
+        per_object_figures = {}
+        for figure in all_figures:
+            per_object_figures.setdefault(figure.object_id, []).append(figure)
+        destination_figures = []
         for this_figure in self.figures:
             object_id = this_figure.object_id
-            this_object_figures = [
-                fig
-                for fig in all_figures
-                if fig.object_id == object_id and fig.frame_index > this_figure.frame_index
-            ]
-            if len(this_object_figures) == 0:
-                next_figures.append(None)
-                continue
-            next_figure = min(this_object_figures, key=lambda fig: fig.frame_index)
-            if next_figure.frame_index - this_figure.frame_index == 1:
-                next_figures.append(None)
-                continue
-            next_figures.append(next_figure)
-        return next_figures
+            left = None
+            right = None
+            for figure in per_object_figures.get(object_id, []):
+                if figure.frame_index < this_figure.frame_index:
+                    if left is None or left.frame_index < figure.frame_index:
+                        left = figure
+                if figure.frame_index > this_figure.frame_index:
+                    if right is None or right.frame_index > figure.frame_index:
+                        right = figure
+            if left is not None and this_figure.frame_index - left.frame_index < 2:
+                left = None
+            if right is not None and right.frame_index - this_figure.frame_index < 2:
+                right = None
+            destination_figures.append((left, right))
+        return destination_figures
 
     def filter_destination_figures(
-        self, dest_figures: List[FigureInfo]
+        self, dest_figures: List[Tuple[FigureInfo, FigureInfo]]
     ) -> Tuple[List[FigureInfo], List[FigureInfo]]:
         figures, dest_figures = self.filter_figures(
-            self.figures, dest_figures, condition=lambda x: x[1] is not None
+            self.figures,
+            dest_figures,
+            condition=lambda x: x[1][0] is not None or x[1][1] is not None,
         )
         if len(figures) < len(self.figures):
             msg = f"Destination figures not found for {len(self.figures) - len(figures)} figures. Such figures will be skipped"
@@ -434,83 +437,106 @@ class Interpolator:
             logger.warning(message, exc_info=True, extra=self.log_extra)
             self.send_warning(message)
 
+    def interpolate_direction(self, this_figure, this_geometry, dest_figure):
+        if dest_figure is None:
+            return
+        dest_geometry = sly.deserialize_geometry(dest_figure.geometry_type, dest_figure.geometry)
+
+        direction = 1 if dest_figure.frame_index >= this_figure.frame_index else -1
+        frames_n = abs(dest_figure.frame_index - this_figure.frame_index) - 1
+        before_this_figure_progress = self.progress_current
+
+        if this_geometry.name() != dest_geometry.name():
+            msg = f"Cannot interpolate between {this_geometry.name()} and {dest_geometry.name()}"
+            logger.info(msg, extra=self.log_extra)
+            self.send_warning(msg)
+            self.progress_current += frames_n
+            return
+
+        interpolator_func = INTERPOLATORS.get(
+            this_geometry.name(), unsupported_geometry_interpolator
+        )
+        try:
+            frame_index = this_figure.frame_index + direction
+            cum_batch = []
+            for batch in interpolator_func(
+                this_geometry,
+                dest_geometry,
+                frames_n=frames_n,
+                video_info=self.video_info,
+            ):
+                cum_batch.append(batch)
+                if len(cum_batch) < MIN_GEOMETRIES_BATCH_SIZE:
+                    continue
+                frame_indexes = list(
+                    range(frame_index, frame_index + len(cum_batch) * direction, direction)
+                )
+                frame_index = frame_indexes[-1] + direction
+                self.upload(this_figure.object_id, cum_batch, frame_indexes)
+                self.progress_current += len(cum_batch)
+                cum_batch = []
+                self.notify_progress()
+            if len(cum_batch) > 0:
+                frame_indexes = list(
+                    range(frame_index, frame_index + len(cum_batch) * direction, direction)
+                )
+                self.upload(this_figure.object_id, cum_batch, frame_indexes)
+                self.progress_current += len(cum_batch)
+                self.notify_progress()
+        except NotImplementedError:
+            msg = f"Interpolation for geometry {this_geometry.name()} is not supported yet. Skipping figure"
+            logger.info(msg, extra=self.log_extra)
+            self.send_warning(msg)
+            self.progress_current += frames_n
+        except Exception as e:
+            msg = f"Unexpected Error during interpolation: {str(e)}"
+            logger.warning(msg, exc_info=True, extra=self.log_extra)
+            self.send_warning(msg)
+            this_figure_progress = before_this_figure_progress - self.progress_current
+            self.progress_current += frames_n - this_figure_progress
+        finally:
+            self.notify_progress()
+
     def interpolate_frames(self):
         self.notify_progress()
-        dest_figures: List[FigureInfo] = self.find_destination_figures()
+        dest_figures: List[Tuple[FigureInfo, FigureInfo]] = self.find_destination_figures()
         figures, dest_figures = self.filter_destination_figures(dest_figures)
         if len(figures) == 0:
             msg = "No valid figures to interpolate"
             logger.info(msg, extra=self.log_extra)
             utils.notify_error(self.api, self.track_id, self.video_id, msg)
             return
-        self.frame_end = max([figure.frame_index for figure in dest_figures]) - 1
-        self.progress_total = sum(
-            [
-                dest_figure.frame_index - this_figure.frame_index - 1
-                for this_figure, dest_figure in zip(figures, dest_figures)
-            ]
-        )
+
+        self.frame_start = min([figure.frame_index for figure in figures])
+        self.frame_end = self.frame_start
+        self.progress_total = 0
+        for this_figure, left_right in zip(figures, dest_figures):
+            left_figure, right_figure = left_right
+            this_from = this_figure.frame_index
+            this_to = this_figure.frame_index
+            if left_figure is not None:
+                self.frame_start = min(self.frame_start, left_figure.frame_index + 1)
+                this_from = left_figure.frame_index
+            if right_figure is not None:
+                self.frame_end = max(self.frame_end, right_figure.frame_index - 1)
+                this_to = right_figure.frame_index
+            self.progress_total += max(0, this_to - this_from - 1)
         self.notify_progress()
-        for this_figure, dest_figure in zip(figures, dest_figures):
-            # interpolate between this_figure and next_figure
+
+        for this_figure, dest_figures in zip(figures, dest_figures):
+            left_dest_figure, right_dest_figure = dest_figures
             this_geometry = sly.deserialize_geometry(
                 this_figure.geometry_type, this_figure.geometry
             )
-            dest_geometry = sly.deserialize_geometry(
-                dest_figure.geometry_type, dest_figure.geometry
-            )
-            frames_n = dest_figure.frame_index - this_figure.frame_index - 1
-            before_this_figure_progress = self.progress_current
 
-            if this_geometry.name() != dest_geometry.name():
-                msg = (
-                    f"Cannot interpolate between {this_geometry.name()} and {dest_geometry.name()}"
-                )
-                logger.info(msg, extra=self.log_extra)
-                self.send_warning(msg)
-                self.progress_current += frames_n
-                continue
+            # left
+            if left_dest_figure is not None:
+                self.interpolate_direction(this_figure, this_geometry, left_dest_figure)
 
-            interpolator_func = INTERPOLATORS.get(
-                this_geometry.name(), unsupported_geometry_interpolator
-            )
-            try:
-                frame_index = this_figure.frame_index + 1
-                cum_batch = []
-                for batch in interpolator_func(
-                    this_geometry,
-                    dest_geometry,
-                    from_frame=this_figure.frame_index,
-                    to_frame=dest_figure.frame_index,
-                    video_info=self.video_info,
-                ):
-                    cum_batch.append(batch)
-                    if len(cum_batch) < MIN_GEOMETRIES_BATCH_SIZE:
-                        continue
-                    frame_indexes = list(range(frame_index, frame_index + len(cum_batch)))
-                    frame_index = frame_indexes[-1] + 1
-                    self.upload(this_figure.object_id, cum_batch, frame_indexes)
-                    self.progress_current += len(cum_batch)
-                    cum_batch = []
-                    self.notify_progress()
-                if len(cum_batch) > 0:
-                    frame_indexes = list(range(frame_index, frame_index + len(cum_batch)))
-                    self.upload(this_figure.object_id, cum_batch, frame_indexes)
-                    self.progress_current += len(cum_batch)
-                    self.notify_progress()
-            except NotImplementedError:
-                msg = f"Interpolation for geometry {this_geometry.name()} is not supported yet. Skipping figure"
-                logger.info(msg, extra=self.log_extra)
-                self.send_warning(msg)
-                self.progress_current += frames_n
-            except Exception as e:
-                msg = f"Unexpected Error during interpolation: {str(e)}"
-                logger.warning(msg, exc_info=True, extra=self.log_extra)
-                self.send_warning(msg)
-                this_figure_progress = before_this_figure_progress - self.progress_current
-                self.progress_current += frames_n - this_figure_progress
-            finally:
-                self.notify_progress()
+            # right
+            if right_dest_figure is not None:
+                self.interpolate_direction(this_figure, this_geometry, right_dest_figure)
+
         self.progress_current = self.progress_total
         self.notify_progress()
 
