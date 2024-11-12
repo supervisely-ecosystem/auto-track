@@ -435,6 +435,7 @@ class GeometryCard:
                 g.team_id,
                 module_id=module_id,
                 statuses=g.APP_STATUS["ready"] + g.APP_STATUS["not_ready"],
+                with_shared=True,
             )
             items.extend(
                 [
