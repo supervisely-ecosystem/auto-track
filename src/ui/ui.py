@@ -178,7 +178,7 @@ def get_nn_settings():
             for name, widget in extra_params.items():
                 if isinstance(widget, Checkbox):
                     settings[geometry_name]["extra_params"][name] = widget.is_checked()
-                elif isinstance(widget, InputNumber):
+                elif hasattr(widget, "get_value"):
                     settings[geometry_name]["extra_params"][name] = widget.get_value()
 
     return settings
