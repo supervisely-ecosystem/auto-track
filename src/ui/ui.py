@@ -174,10 +174,12 @@ def get_nn_settings():
             else:
                 inf_settings = yaml.safe_load(inf_settings)
             settings[geometry_name]["inference_settings"] = inf_settings
-            settings[geometry_name]["extra_params"] = {
-                name: widget.is_checked() if isinstance(widget, Checkbox) else widget.get_value()
-                for name, widget in extra_params.items()
-            }
+            settings[geometry_name]["extra_params"] = {}
+            for name, widget in extra_params.items():
+                if isinstance(widget, Checkbox):
+                    settings[geometry_name]["extra_params"][name] = widget.is_checked()
+                elif isinstance(widget, InputNumber):
+                    settings[geometry_name]["extra_params"][name] = widget.get_value()
 
     return settings
 
