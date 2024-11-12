@@ -44,6 +44,14 @@ GEOMETRIES = (
                 "annotation will be predicted using NN models selected in the previous steps."
             ),
             "geometries": [g.GEOMETRY_NAME.SMARTTOOL],
+            "extra_params": {
+                "notification": {
+                    "type": "notification",
+                    "notification_type": "info",
+                    "title": "Additional models required to enable tracking for SmartTool objects",
+                    "description": "This model is alows to annotate objects using SmartTool. To enable SmartTool objects tracking, Models for Bounding Box and Point based geometries should be selected as well.",
+                }
+            },
         },
     ),
     (

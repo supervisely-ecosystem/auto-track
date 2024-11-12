@@ -16,6 +16,7 @@ from supervisely.app.widgets import (
     Card,
     Flexbox,
     Editor,
+    NotificationBox,
 )
 from supervisely import logger
 from supervisely.nn.inference.session import Session
@@ -306,12 +307,21 @@ class GeometryCard:
                     widget, title=details["title"], description=details["description"]
                 )
                 extra_params_widgets[name] = (widget, widget_field)
+            elif details["type"] == "notification":
+                widget = Empty()
+                widget_field = NotificationBox(
+                    title=details.get("title", ""),
+                    description=details.get("description", ""),
+                    box_type=details.get("notification_type", "info"),
+                )
+                extra_params_widgets[name] = (widget, widget_field)
 
         self.extra_params: Dict[str, Union[Checkbox, InputNumber]] = {
             name: widget for name, (widget, _) in extra_params_widgets.items()
         }
         for name, widget in self.extra_params.items():
-            widget.value_changed(lambda *args: logger.debug("Extra parameters changed"))
+            if hasattr(widget, "value_changed"):
+                widget.value_changed(lambda *args: logger.debug("Extra parameters changed"))
 
         self.inference_settings = Editor(
             language_mode="yaml",
