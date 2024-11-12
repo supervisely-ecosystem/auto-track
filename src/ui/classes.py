@@ -241,14 +241,14 @@ class GeometryCard:
             button_type="success",
             button_size="small",
         )
-        refresh_nn_app_button = Button(
+        self.refresh_nn_app_button = Button(
             "",
             icon="zmdi zmdi-refresh",
             button_type="success",
             button_size="small",
             style="margin-left: 5px",
         )
-        deploy_app_dialog = self.deploy_app.get_dialog()
+        self.deploy_app_dialog = self.deploy_app.get_dialog()
         select_nn_app_container = Container(
             widgets=[
                 self.select_nn_app,
@@ -272,16 +272,23 @@ class GeometryCard:
         self.select_nn = Select(items=select_nn_items)
         select_nn_field = Field(self.select_nn, title="Select model for predictions")
         select_nn_one_of = OneOf(self.select_nn)
+        self.app_status_ok = EMPTY
+        self.app_status_not_ready = NotificationBox(
+            "Model is not ready",
+            "Model is not ready yet. Wait for the model to start before using the application or select another session",
+            "warning",
+        )
+        self.app_status_not_ready.hide()
 
         @self.deploy_app_button.click
         def on_deploy_app_button_click():
-            deploy_app_dialog.show()
+            self.deploy_app_dialog.show()
 
         @self.select_nn.value_changed
         def on_select_nn_changed(value):
             self.update_nn()
 
-        @refresh_nn_app_button.click
+        @self.refresh_nn_app_button.click
         def on_refresh_nn_app_button_click():
             self.update_nn()
 
@@ -389,15 +396,18 @@ class GeometryCard:
                         widgets=[
                             select_nn_field,
                             select_nn_one_of,
-                            Flexbox(widgets=[self.deploy_app_button, refresh_nn_app_button], gap=0),
-                            deploy_app_dialog,
+                            Flexbox(
+                                widgets=[self.deploy_app_button, self.refresh_nn_app_button], gap=0
+                            ),
+                            self.deploy_app_dialog,
                             *[x[1] for x in extra_params_widgets.values()],
+                            self.app_status_not_ready,
                         ],
                     ),
                     self.inference_settings_field,
                 ],
                 direction="horizontal",
-                fractions=[30, 70],
+                fractions=[35, 65],
             ),
         )
 
@@ -414,6 +424,7 @@ class GeometryCard:
         return self.inference_settings
 
     def update_nn(self):
+        self.refresh_nn_app_button.loading = True
         nns = self.deploy_app.get_neural_networks()
         nn_selector, session_selector = self.get_selectors()
         current_session = session_selector.get_value()
@@ -421,11 +432,17 @@ class GeometryCard:
         for nn in nns:
             module_id = nn.module_id
             sessions = g.api.app.get_sessions(
-                g.team_id, module_id=module_id, statuses=[g.api.app.Status.STARTED]
+                g.team_id,
+                module_id=module_id,
+                statuses=g.APP_STATUS["ready"] + g.APP_STATUS["not_ready"],
             )
             items.extend(
                 [
-                    Select.Item(session.task_id, f"{nn.title}: {session.task_id}", content=EMPTY)
+                    Select.Item(
+                        session.task_id,
+                        f"{nn.title}: {session.task_id}",
+                        content=EMPTY,
+                    )
                     for session in sessions
                 ]
             )
@@ -453,17 +470,28 @@ class GeometryCard:
                 nn_selector.set(items=items)
                 nn_selector.set_value("app")
 
+        if not self.deploy_app_dialog.is_hidden():
+            self.deploy_app_dialog.hide()
+
         if nn_selector.get_value() == "app":
             selected_session_id = session_selector.get_value()
-            if selected_session_id is None:
-                settings = ""
-            else:
+            is_deployed = False
+            settings = ""
+            if selected_session_id is not None:
                 try:
                     selected_session = Session(g.api, selected_session_id)
+                    is_deployed = selected_session.is_model_deployed()
                     settings = selected_session.get_default_inference_settings()
                     settings = yaml.safe_dump(settings)
                 except Exception:
                     logger.warning("Failed to get inference settings", exc_info=True)
                     settings = ""
+                if is_deployed:
+                    self.app_status_not_ready.hide()
+                else:
+                    self.app_status_not_ready.show()
+            else:
+                self.app_status_not_ready.hide()
             self.inference_settings.set_text(settings)
             self.default_inference_settings = settings
+        self.refresh_nn_app_button.loading = False
