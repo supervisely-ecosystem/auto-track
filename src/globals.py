@@ -61,6 +61,21 @@ class GEOMETRY_NAME:
     DETECTOR = "detector"
 
 
+APP_STATUS = {
+    "ready": [api.app.Status.STARTED, api.app.Status.DEPLOYED],
+    "not_ready": [
+        api.app.Status.CONSUMED,
+        api.app.Status.QUEUED,
+    ],
+    "stopped": [
+        api.app.Status.STOPPED,
+        api.app.Status.ERROR,
+        api.app.Status.TERMINATING,
+        api.app.Status.FINISHED,
+    ],
+}
+
+
 class AppParameterDescription:
     def __init__(
         self,
