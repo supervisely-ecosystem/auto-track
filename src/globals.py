@@ -195,9 +195,17 @@ class NN:
         cloud_url=ENV.yolov8_url(),
         params={},
     )
+    SAM2 = NeuralNetwork(
+        name="sam2",
+        module_id=api.app.get_ecosystem_module_id("supervisely-ecosystem/serve-segment-anything-2"),
+        title="Segment Anything 2",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
-nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8]
+nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2]
 geometry_nn = {
     GEOMETRY_NAME.RECTANGLE: [NN.MIX_FORMER],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
@@ -205,7 +213,7 @@ geometry_nn = {
     GEOMETRY_NAME.POLYGON: [NN.CO_TRACKER],
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
     GEOMETRY_NAME.BITMAP: [NN.XMEM],
-    GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG],
+    GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2],
     GEOMETRY_NAME.DETECTOR: [NN.YOLOV8],
 }
 
