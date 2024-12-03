@@ -240,6 +240,8 @@ class Timeline:
                     tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
                 ]
                 for frame_i, frame_predictions in enumerate(predictions):
+                    if len(frame_predictions) == 0:
+                        return predictions
                     this_center = utils.get_figures_center(frame_predictions)
                     this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
                     small_area = False
