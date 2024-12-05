@@ -1,3 +1,4 @@
+import os
 from typing import List, Union
 from supervisely.app.widgets import (
     Container,
@@ -9,6 +10,7 @@ from supervisely.app.widgets import (
     OneOf,
     Empty,
     Checkbox,
+    Button,
 )
 from supervisely import logger
 import yaml
@@ -141,8 +143,18 @@ disappear_parameters_card = Card(
 )
 disappear_parameters_card.collapse()
 
+crash = Button()
+
+
+@crash.click
+def crash_handler():
+    logger.fatal("Crash button clicked")
+    os._exit(1)
+
+
 layout = Container(
     widgets=[
+        crash,
         Container(widgets=[select_nn_settings_text, select_nn_settings_description_text], gap=5),
         *[card.card for card in GEOMETRY_CARDS.values()],
         disappear_parameters_card,
