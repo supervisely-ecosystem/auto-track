@@ -1,5 +1,5 @@
 import supervisely as sly
-from supervisely.app.widgets import Empty, Card
+from supervisely.app.widgets import Empty
 
 import src.globals as g
 from .classes import DeployAppParameters, DeployAppByGeometry, GeometryCard
@@ -18,7 +18,7 @@ GEOMETRIES = (
         g.GEOMETRY_NAME.POINT,
         {
             "title": "Point based geometries",
-            "description": "Select NN model for Point, Polyline, Ploygon and Keypoints figures",
+            "description": "Select NN model for Point, Polyline, Polygon and Keypoints figures",
             "geometries": [
                 g.GEOMETRY_NAME.POINT,
                 g.GEOMETRY_NAME.POLYLINE,

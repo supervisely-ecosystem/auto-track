@@ -271,6 +271,8 @@ def get_figure_area(figure_info: FigureInfo) -> float:
 
 
 def get_figures_center(figures: List[FigureInfo]):
+    if len(figures) == 0:
+        return None
     figure_boxes_centers: List[sly.Rectangle] = [
         sly.deserialize_geometry(figure.geometry_type, figure.geometry).to_bbox().center
         for figure in figures

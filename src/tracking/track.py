@@ -194,6 +194,9 @@ class Timeline:
             frame_to_figure.setdefault(figure.frame_index, []).append(figure)
         start_figures = frame_to_figure.get(start_frame, [])
 
+        if len(start_figures) == 0:
+            raise ValueError("No figures found for object on start frame")
+
         self.tracklets: List[Tracklet] = []
         tracklet = Tracklet(
             self,
@@ -293,6 +296,8 @@ class Timeline:
     def update_object_info(self, object_info=None):
         if object_info is None:
             object_info = self.track.api.video.object.get_info_by_id(self.object_id)
+        if object_info is None:
+            raise ValueError(f"Object with id {self.object_id} not found")
         self.object_info = object_info
 
     def update_no_object_frames(self):
@@ -686,15 +691,23 @@ class Track:
         }
 
         for object_id in self.object_ids:
-            timeline = Timeline(
-                self,
-                object_id,
-                self.frame_ranges[0][0],
-                self.frame_ranges[0][1],
-                object_info=object_infos_dict.get(object_id, None),
-                figures=all_figures_dict.get(object_id, None),
-            )
-            self.timelines.append(timeline)
+            try:
+                timeline = Timeline(
+                    self,
+                    object_id,
+                    self.frame_ranges[0][0],
+                    self.frame_ranges[0][1],
+                    object_info=object_infos_dict.get(object_id, None),
+                    figures=all_figures_dict.get(object_id, None),
+                )
+                self.timelines.append(timeline)
+            except Exception:
+                self.logger.debug(
+                    "Unable to create a timeline for object #%s",
+                    object_id,
+                    exc_info=True,
+                    extra=self.logger_extra,
+                )
 
         self.logger.debug(
             "inited timelines",
@@ -956,6 +969,8 @@ class Track:
                 e, {"geometry": geometry_type, "frames": [frame_from, frame_to]}
             )
             message = f"Error during tracking: {exc_str}"
+            if "Task with id" in exc_str and "not found" in exc_str:
+                message = "Selected session is not available. Please select another session in the Auto Track app GUI."
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
             return None
         result = []
@@ -1620,14 +1635,22 @@ class Track:
                 timeline = obj_id_to_timeline[object_id]
                 timeline.object_changed(frame_index, frame_range[1] - frame_index)
             else:
-                self.timelines.append(
-                    Timeline(
-                        self,
-                        object_id,
-                        frame_index,
-                        frame_range[1],
+                try:
+                    self.timelines.append(
+                        Timeline(
+                            self,
+                            object_id,
+                            frame_index,
+                            frame_range[1],
+                        )
                     )
-                )
+                except Exception:
+                    self.logger.error(
+                        "Unable to create timeline for object #%s",
+                        object_id,
+                        exc_info=True,
+                        extra={"object_id": object_id, "track_info": self.logger_extra},
+                    )
 
     def continue_track(self, frame_index: int, frames_count: int):
         """
