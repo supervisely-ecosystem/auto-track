@@ -163,6 +163,12 @@ def unsupported_geometry_interpolator(this_geom: Geometry, **kwargs):
     raise NotImplementedError(msg)
 
 
+def _fix_unbound(box: sly.Rectangle, frame_hw: Tuple[int, int]) -> sly.Rectangle:
+    return sly.Rectangle(
+        max(0, box.top), max(0, box.left), min(frame_hw[0], box.bottom), min(frame_hw[1], box.right)
+    )
+
+
 def interpolate_box(
     this_geom: sly.Rectangle,
     dest_geom: sly.Rectangle,
@@ -175,7 +181,7 @@ def interpolate_box(
     rowshift = (dest_geom.center.row - this_geom.center.row) / (frames_n + 1)
     colshift = (dest_geom.center.col - this_geom.center.col) / (frames_n + 1)
     created_geometries: List[sly.AnyGeometry] = []
-    for i in range(1, frames_n+1):
+    for i in range(1, frames_n + 1):
         resized: sly.Rectangle = this_geom.resize(
             in_size=(video_info.frame_height, video_info.frame_width),
             out_size=(
@@ -187,6 +193,7 @@ def interpolate_box(
         moved: sly.Rectangle = resized.translate(
             target[0] - resized.center.row, target[1] - resized.center.col
         )
+        moved = _fix_unbound(moved, (video_info.frame_height, video_info.frame_width))
         created_geometries.append(moved)
     logger.debug("Done interpolating box")
     return created_geometries
