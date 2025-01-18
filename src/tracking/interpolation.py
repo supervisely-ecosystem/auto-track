@@ -238,8 +238,7 @@ def interpolate_line(
     logger.debug("Interpolating line")
     created_geometries: List[sly.Polyline] = []
     if len(this_geom.exterior) != len(dest_geom.exterior):
-        logger.warning("Cannot interpolate lines with different number of points")
-        return []
+        raise ValueError("Cannot interpolate lines with different number of points")
     for i in range(1, frames_n + 1):
         t = i / (frames_n + 1)
         points = []
@@ -496,6 +495,11 @@ class Interpolator:
             self.send_warning(msg)
             self.progress_current += frames_n
         except Exception as e:
+            if "Cannot interpolate lines with different number of points" in str(e):
+                message = "Cannot interpolate lines with different number of points"
+                logger.warning(message)
+                self.send_warning(message)
+                return
             msg = f"Unexpected Error during interpolation: {str(e)}"
             logger.warning(msg, exc_info=True, extra=self.log_extra)
             self.send_warning(msg)
