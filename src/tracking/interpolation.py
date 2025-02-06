@@ -1,3 +1,5 @@
+from threading import Lock
+import time
 from typing import Dict, Generator, List, Tuple
 import uuid
 
@@ -18,6 +20,9 @@ import src.utils as utils
 
 INTERPOLATION_FRAMES_LIMIT = 200
 MIN_GEOMETRIES_BATCH_SIZE = 10
+
+
+active_interpolations = {}
 
 
 def _morph_masks_gen(mask1, mask2, N):
@@ -554,4 +559,13 @@ class Interpolator:
 
 @utils.send_error_data
 def interpolate_frames(api, context):
-    Interpolator(api, context).interpolate_frames()
+    track_id = context.get("trackId", None)
+    if track_id not in active_interpolations:
+        active_interpolations[track_id] = Lock()
+    if active_interpolations[track_id].locked():
+        logger.info(
+            "Interpolation is already running. Waiting for it to finish",
+            extra={"track_id": track_id},
+        )
+    with active_interpolations[track_id]:
+        Interpolator(api, context).interpolate_frames()
