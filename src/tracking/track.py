@@ -278,6 +278,16 @@ class Timeline:
                                 "frame_index": frame_from + frame_i,
                             },
                         )
+                        if small_area:
+                            message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} as it has disappeared due to significant size reduction."
+                        elif jumped:
+                            message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} due to detected movement anomaly."
+                        utils.notify_warning(
+                            self.track.api,
+                            self.track.track_id,
+                            self.track.video_id,
+                            message=message,
+                        )
                         return predictions
                     last_areas.append(this_area)
                 return predictions
