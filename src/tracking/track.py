@@ -615,7 +615,7 @@ class Track:
 
         self.logger = self.api.logger
 
-        self.batch_size = 16
+        self.batch_size = 8
         self.updates: List[Update] = []
         self.updates_pending = False
         self._lock = threading.Lock()
