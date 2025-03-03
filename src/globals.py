@@ -203,11 +203,21 @@ class NN:
         cloud_url="",
         params={},
     )
+    MCITrack = NeuralNetwork(
+        name="mci_track",
+        module_id=api.app.get_ecosystem_module_id(
+            "supervisely-ecosystem/MCITrack/supervisely_integration"
+        ),
+        title="MCITrack",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
 nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2]
 geometry_nn = {
-    GEOMETRY_NAME.RECTANGLE: [NN.MIX_FORMER],
+    GEOMETRY_NAME.RECTANGLE: [NN.MCITrack, NN.MIX_FORMER],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
     GEOMETRY_NAME.POLYLINE: [NN.CO_TRACKER],
     GEOMETRY_NAME.POLYGON: [NN.CO_TRACKER],
