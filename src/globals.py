@@ -206,7 +206,7 @@ class NN:
     MCITrack = NeuralNetwork(
         name="mci_track",
         module_id=api.app.get_ecosystem_module_id(
-            "supervisely-ecosystem/MCITrack/supervisely_integration"
+            "supervisely-ecosystem/mcitrack/supervisely_integration"
         ),
         title="MCITrack",
         description="",
