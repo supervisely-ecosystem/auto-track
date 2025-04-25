@@ -11,7 +11,8 @@
     "neural network",
     "detection & tracking",
     "segmentation & tracking",
-    "interactive segmentation"
+    "interactive segmentation",
+    "serve"
   ],
   "task_location": "application_sessions",
   "icon": "https://github.com/supervisely-ecosystem/auto-track/assets/119248312/505f620b-9ab6-4ddd-998f-6c3f82cce6b7",
