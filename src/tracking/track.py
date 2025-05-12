@@ -457,6 +457,9 @@ class Timeline:
             if tracklet.start_frame == frame_index:
                 if len(self.key_figures.get(frame_index, [])) == 0:
                     tracklets_to_remove.append(frame_index)
+                    self.track.prevent_object_upload(
+                        self.object_id, (frame_index, (frame_index, tracklet.end_frame))
+                    )
                 else:
                     self.track.prevent_object_upload(
                         self.object_id, (frame_index, (frame_index, tracklet.end_frame))
@@ -467,9 +470,6 @@ class Timeline:
                 tracklet.continue_tracklet(end_frame_for_current_range)
 
         for i in tracklets_to_remove:
-            self.track.prevent_object_upload(
-                self.object_id, (frame_index, self.tracklets[i].end_frame)
-            )
             self.remove_tracklet(i, clear=True)
 
     def remove_tracklet(self, frame_index: int, clear=False):
