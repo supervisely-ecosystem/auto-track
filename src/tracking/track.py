@@ -1950,9 +1950,9 @@ def track(
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track
-        if not cur_track.validate_timelines():
-            cur_track.nullify_progress()
-            raise ValueError("No settings for selected geometries. Tracking stopped.")
+        # if not cur_track.validate_timelines():
+        #     cur_track.nullify_progress()
+        #     raise ValueError("No settings for selected geometries. Tracking stopped.")
     try:
         cur_track.run()
     finally:
