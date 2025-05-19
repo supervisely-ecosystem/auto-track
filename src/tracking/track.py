@@ -1465,20 +1465,16 @@ class Track:
                     for figure in tracklet.last_tracked[1]:
                         geoms_to_check.add(inference.get_figure_geometry_name(figure))
         skipping_strs = []
-        if g.GEOMETRY_NAME.SMARTTOOL in geoms_to_check:
-            geoms_to_check.pop(g.GEOMETRY_NAME.SMARTTOOL)
-            _, invalid = validate_nn_settings_for_geometry(
-                self.nn_settings, g.GEOMETRY_NAME.SMARTTOOL, raise_error=False
-            )
-            if invalid:
-                skipping_strs.append(f"Smarttool(missing: {', '.join(invalid)})")
 
         for geometry_type in geoms_to_check:
-            is_valid, _ = validate_nn_settings_for_geometry(
+            is_valid, invalid = validate_nn_settings_for_geometry(
                 self.nn_settings, geometry_type, raise_error=False
             )
             if not is_valid:
-                skipping_strs.append(geometry_type)
+                if geometry_type == g.GEOMETRY_NAME.SMARTTOOL:
+                    skipping_strs.append(f"Smarttool(missing: {', '.join(invalid)})")
+                else:
+                    skipping_strs.append(geometry_type)
         if skipping_strs:
             utils.notify_warning(
                 self.api,
