@@ -1463,7 +1463,7 @@ class Track:
             for tracklet in timeline.tracklets:
                 if tracklet.last_tracked is not None:
                     for figure in tracklet.last_tracked[1]:
-                        geoms_to_check.add(figure.geometry_type)
+                        geoms_to_check.add(inference.get_figure_geometry_name(figure))
         skipping_strs = []
         if g.GEOMETRY_NAME.SMARTTOOL in geoms_to_check:
             geoms_to_check.pop(g.GEOMETRY_NAME.SMARTTOOL)
