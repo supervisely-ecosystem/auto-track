@@ -11,6 +11,7 @@ import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely.api.module_api import ApiField
 from supervisely import TinyTimer
+from supervisely import logger
 
 import src.globals as g
 import src.utils as utils
@@ -728,8 +729,17 @@ class Track:
         if self.is_detection_enabled():
             return True
         for timeline in self.timelines:
+            logger.debug("Validating timeline %s", timeline.object_id, extra=timeline.log_data())
             for tracklet in timeline.tracklets:
+                logger.debug(
+                    "Validating timeline %s", tracklet.start_frame, extra=tracklet.log_data()
+                )
                 for figure in tracklet.last_tracked[1]:
+                    logger.debug(
+                        "Validating figure %s",
+                        figure.frame_index,
+                        extra={"figure": figure._asdict()},
+                    )
                     if validate_nn_settings_for_geometry(
                         self.nn_settings, figure.geometry_type, raise_error=False
                     )[0]:
