@@ -741,7 +741,9 @@ class Track:
                         extra={"figure": figure._asdict()},
                     )
                     if validate_nn_settings_for_geometry(
-                        self.nn_settings, figure.geometry_type, raise_error=False
+                        self.nn_settings,
+                        inference.get_figure_geometry_name(figure),
+                        raise_error=False,
                     )[0]:
                         return True
         return False
@@ -787,7 +789,10 @@ class Track:
                 figure
                 for figure in tl_batch[2]
                 if validate_nn_settings_for_geometry(
-                    self.nn_settings, figure.geometry_type, raise_error=False, logger=self.logger
+                    self.nn_settings,
+                    inference.get_figure_geometry_name(figure),
+                    raise_error=False,
+                    logger=self.logger,
                 )[0]
             ]
         tl_batches = [tl_batch for tl_batch in tl_batches if len(tl_batch[2]) > 0]
@@ -1950,9 +1955,9 @@ def track(
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track
-        # if not cur_track.validate_timelines():
-        #     cur_track.nullify_progress()
-        #     raise ValueError("No settings for selected geometries. Tracking stopped.")
+        if not cur_track.validate_timelines():
+            cur_track.nullify_progress()
+            raise ValueError("No settings for selected geometries. Tracking stopped.")
     try:
         cur_track.run()
     finally:
