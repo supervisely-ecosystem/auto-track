@@ -1076,7 +1076,7 @@ class Track:
 
     def is_detection_enabled(self):
         valid, _ = validate_nn_settings_for_geometry(
-            self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False, logger=self.logger
+            self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False
         )
         enabled = (
             self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
@@ -1478,6 +1478,7 @@ class Track:
                             remove_n += 1
                     if remove_n == len(tracklet.last_tracked[1]):
                         tracklets_to_remove.append(tracklet)
+        self.logger.info("skipping strs: %s", skipping_strs)
         if skipping_strs:
             utils.notify_warning(
                 self.api,
