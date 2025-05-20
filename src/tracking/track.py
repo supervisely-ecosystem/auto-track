@@ -1458,23 +1458,25 @@ class Track:
             self._upload_thread.start()
 
     def _check_and_notify_missing_geoms(self):
-        geoms_to_check = set()
+        skipping_strs = set()
+        tracklets_to_remove = []
         for timeline in self.timelines:
             for tracklet in timeline.tracklets:
                 if tracklet.last_tracked is not None:
+                    remove_n = 0
                     for figure in tracklet.last_tracked[1]:
-                        geoms_to_check.add(inference.get_figure_geometry_name(figure))
-        skipping_strs = []
-
-        for geometry_type in geoms_to_check:
-            is_valid, invalid = validate_nn_settings_for_geometry(
-                self.nn_settings, geometry_type, raise_error=False
-            )
-            if not is_valid:
-                if geometry_type == g.GEOMETRY_NAME.SMARTTOOL:
-                    skipping_strs.append(f"Smarttool(missing: {', '.join(invalid)})")
-                else:
-                    skipping_strs.append(geometry_type)
+                        geometry_type = inference.get_figure_geometry_name(figure)
+                        is_valid, invalid = validate_nn_settings_for_geometry(
+                            self.nn_settings, geometry_type, raise_error=False
+                        )
+                        if not is_valid:
+                            if geometry_type == g.GEOMETRY_NAME.SMARTTOOL:
+                                skipping_strs.add(f"Smarttool(missing: {', '.join(invalid)})")
+                            else:
+                                skipping_strs.add(geometry_type)
+                            remove_n += 1
+                    if remove_n == len(tracklet.last_tracked[1]):
+                        tracklets_to_remove.append(tracklet)
         if skipping_strs:
             utils.notify_warning(
                 self.api,
@@ -1482,6 +1484,10 @@ class Track:
                 self.video_id,
                 f"Model settings are missing for some geometries, such objects will be skipped. Skipping geometries: {', '.join(skipping_strs)}",
             )
+        for tracklet in tracklets_to_remove:
+            tracklet: Tracklet
+            tracklet.timeline.remove_tracklet(tracklet.start_frame)
+        self.refresh_progress()
 
     # RUN main loop
     def run(self):
