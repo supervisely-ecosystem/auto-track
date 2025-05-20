@@ -11,6 +11,7 @@ import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 from supervisely.api.module_api import ApiField
 from supervisely import TinyTimer
+from supervisely import logger
 
 import src.globals as g
 import src.utils as utils
@@ -728,10 +729,22 @@ class Track:
         if self.is_detection_enabled():
             return True
         for timeline in self.timelines:
+            logger.debug("Validating timeline %s", timeline.object_id, extra=timeline.log_data())
             for tracklet in timeline.tracklets:
+                logger.debug(
+                    "Validating timeline %s", tracklet.start_frame, extra=tracklet.log_data()
+                )
                 for figure in tracklet.last_tracked[1]:
+                    logger.debug(
+                        "Validating figure %s",
+                        figure.frame_index,
+                        extra={"figure": figure._asdict()},
+                    )
                     if validate_nn_settings_for_geometry(
-                        self.nn_settings, figure.geometry_type, raise_error=False
+                        self.nn_settings,
+                        inference.get_figure_geometry_name(figure),
+                        raise_error=False,
+                        logger=self.logger,
                     )[0]:
                         return True
         return False
@@ -777,7 +790,10 @@ class Track:
                 figure
                 for figure in tl_batch[2]
                 if validate_nn_settings_for_geometry(
-                    self.nn_settings, figure.geometry_type, raise_error=False, logger=self.logger
+                    self.nn_settings,
+                    inference.get_figure_geometry_name(figure),
+                    raise_error=False,
+                    logger=self.logger,
                 )[0]
             ]
         tl_batches = [tl_batch for tl_batch in tl_batches if len(tl_batch[2]) > 0]
@@ -933,7 +949,7 @@ class Track:
         """
         self.logger.debug("Tracking geometry type %s", geometry_type, extra=self.logger_extra)
         try:
-            validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
+            validate_nn_settings_for_geometry(self.nn_settings, geometry_type, logger=self.logger)
         except Exception as e:
             message = f"Invalid settings for geometry type {geometry_type}, this geometry will not be tracked."
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
@@ -1443,27 +1459,26 @@ class Track:
             self._upload_thread.start()
 
     def _check_and_notify_missing_geoms(self):
-        geoms_to_check = set()
+        skipping_strs = set()
+        tracklets_to_remove = []
         for timeline in self.timelines:
             for tracklet in timeline.tracklets:
                 if tracklet.last_tracked is not None:
+                    remove_n = 0
                     for figure in tracklet.last_tracked[1]:
-                        geoms_to_check.add(figure.geometry_type)
-        skipping_strs = []
-        if g.GEOMETRY_NAME.SMARTTOOL in geoms_to_check:
-            geoms_to_check.pop(g.GEOMETRY_NAME.SMARTTOOL)
-            _, invalid = validate_nn_settings_for_geometry(
-                self.nn_settings, g.GEOMETRY_NAME.SMARTTOOL, raise_error=False
-            )
-            if invalid:
-                skipping_strs.append(f"Smarttool(missing: {', '.join(invalid)})")
-
-        for geometry_type in geoms_to_check:
-            is_valid, _ = validate_nn_settings_for_geometry(
-                self.nn_settings, geometry_type, raise_error=False
-            )
-            if not is_valid:
-                skipping_strs.append(geometry_type)
+                        geometry_type = inference.get_figure_geometry_name(figure)
+                        is_valid, invalid = validate_nn_settings_for_geometry(
+                            self.nn_settings, geometry_type, raise_error=False, logger=self.logger
+                        )
+                        if not is_valid:
+                            if geometry_type == g.GEOMETRY_NAME.SMARTTOOL:
+                                skipping_strs.add(f"Smarttool(missing: {', '.join(invalid)})")
+                            else:
+                                skipping_strs.add(geometry_type)
+                            remove_n += 1
+                    if remove_n == len(tracklet.last_tracked[1]):
+                        tracklets_to_remove.append(tracklet)
+        self.logger.info("skipping strs: %s", skipping_strs)
         if skipping_strs:
             utils.notify_warning(
                 self.api,
@@ -1471,6 +1486,13 @@ class Track:
                 self.video_id,
                 f"Model settings are missing for some geometries, such objects will be skipped. Skipping geometries: {', '.join(skipping_strs)}",
             )
+            self.logger.info(
+                "Skipping geometries: %s", ", ".join(skipping_strs), extra=self.logger_extra
+            )
+        for tracklet in tracklets_to_remove:
+            tracklet: Tracklet
+            tracklet.timeline.remove_tracklet(tracklet.start_frame)
+        self.refresh_progress()
 
     # RUN main loop
     def run(self):
