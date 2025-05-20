@@ -744,6 +744,7 @@ class Track:
                         self.nn_settings,
                         inference.get_figure_geometry_name(figure),
                         raise_error=False,
+                        logger=self.logger,
                     )[0]:
                         return True
         return False
@@ -948,7 +949,7 @@ class Track:
         """
         self.logger.debug("Tracking geometry type %s", geometry_type, extra=self.logger_extra)
         try:
-            validate_nn_settings_for_geometry(self.nn_settings, geometry_type)
+            validate_nn_settings_for_geometry(self.nn_settings, geometry_type, logger=self.logger)
         except Exception as e:
             message = f"Invalid settings for geometry type {geometry_type}, this geometry will not be tracked."
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
@@ -1075,7 +1076,7 @@ class Track:
 
     def is_detection_enabled(self):
         valid, _ = validate_nn_settings_for_geometry(
-            self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False
+            self.nn_settings, g.GEOMETRY_NAME.DETECTOR, raise_error=False, logger=self.logger
         )
         enabled = (
             self.nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {})
@@ -1467,7 +1468,7 @@ class Track:
                     for figure in tracklet.last_tracked[1]:
                         geometry_type = inference.get_figure_geometry_name(figure)
                         is_valid, invalid = validate_nn_settings_for_geometry(
-                            self.nn_settings, geometry_type, raise_error=False
+                            self.nn_settings, geometry_type, raise_error=False, logger=self.logger
                         )
                         if not is_valid:
                             if geometry_type == g.GEOMETRY_NAME.SMARTTOOL:
@@ -1483,6 +1484,9 @@ class Track:
                 self.track_id,
                 self.video_id,
                 f"Model settings are missing for some geometries, such objects will be skipped. Skipping geometries: {', '.join(skipping_strs)}",
+            )
+            self.logger.info(
+                "Skipping geometries: %s", ", ".join(skipping_strs), extra=self.logger_extra
             )
         for tracklet in tracklets_to_remove:
             tracklet: Tracklet
