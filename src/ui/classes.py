@@ -1,3 +1,4 @@
+import threading
 import time
 from typing import Callable, Dict, List, Tuple, Union
 
@@ -233,6 +234,9 @@ class GeometryCard:
         self.default_inference_settings = ""
         self.create_widgets()
 
+        self._auto_refresh_thread = threading.Thread(target=self._auto_refresh, daemon=True)
+        self._auto_refresh_thread.start()
+
     def create_widgets(self):
         self.select_nn_app = Select(items=[])
         select_nn_app_oneof = OneOf(self.select_nn_app)
@@ -422,6 +426,11 @@ class GeometryCard:
 
     def get_inference_settings(self) -> Editor:
         return self.inference_settings
+
+    def _auto_refresh(self):
+        while True:
+            time.sleep(60)
+            self.update_nn()
 
     def update_nn(self):
         self.refresh_nn_app_button.loading = True
