@@ -5,6 +5,7 @@ import queue
 import threading
 import time
 import uuid
+from fastapi import Request
 
 import numpy as np
 import supervisely as sly
@@ -602,6 +603,7 @@ class Track:
         disappear_params: Dict = None,
         detection_enabled: bool = True,
         disappear_enabled: bool = True,
+        cookies: Dict[str, str] = None,
     ):
         self.track_id = track_id
         self.api = api
@@ -636,6 +638,8 @@ class Track:
         self.detections_cache = {}
         self.detection_enabled = detection_enabled
         self.disappear_enabled = disappear_enabled
+        self.cookies = cookies
+        self._set_cookie = None
 
         self.no_object_tag_ids = [
             t.id
@@ -1794,6 +1798,21 @@ class Track:
     def stop(self):
         self.global_stop_indicator = True
 
+    def maybe_update_cookies(self, cookies: Dict[str, str]):
+        """
+        Update cookies if needed.
+        This is used to update cookies in the tracking session.
+        """
+        if cookies is None:
+            return
+        if self.cookies is None:
+            self.cookies = cookies
+        else:
+            self.cookies.update(cookies)
+
+    def get_set_cookie(self):
+        return self._set_cookie
+
 
 @utils.send_error_data
 def track(
@@ -1804,6 +1823,7 @@ def track(
     cloud_token: str = None,
     cloud_action_id: str = None,
     disappear_params: Dict = None,
+    cookies: Dict[str, str] = None,
 ):
     sly.logger.debug("track", extra={"context": context, "nn_settings": nn_settings})
 
@@ -1811,6 +1831,7 @@ def track(
     disappear_enabled = context.get("detectOffScreen", True)
     for cur_track in g.current_tracks.values():
         if cur_track.track_id == track_id:
+            cur_track.maybe_update_cookies(cookies)
             cur_track.disappear_enabled = disappear_enabled
     if update_type == Update.Type.DELETE:
         delete_data = []
@@ -1959,6 +1980,7 @@ def track(
             disappear_params=disappear_params,
             detection_enabled=detection_enabled,
             disappear_enabled=disappear_enabled,
+            cookies=cookies,
         )
         api.logger.info("Start tracking.")
         g.current_tracks[track_id] = cur_track

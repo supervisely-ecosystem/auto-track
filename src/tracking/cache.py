@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
+from fastapi import Request
 import requests
 import supervisely as sly
 
@@ -7,7 +8,7 @@ import supervisely as sly
 import src.globals as g
 
 
-def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
+def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict, cookies: Dict[str, str] = None):
     if "url" in nn_settings[geometry]:
         url = nn_settings[geometry]["url"]
         if url is None or url == "":
@@ -20,6 +21,7 @@ def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
             f"{url}/smart_cache",
             json={"state": state, "server_address": api.server_address, "api_token": api.token},
             timeout=60,
+            cookies=cookies
         )
         r.raise_for_status()
         sly.logger.debug("Cache video response", extra={"response": r.json(), "geometry": geometry})
@@ -34,11 +36,11 @@ def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
         sly.logger.debug(
             "Cache video request", extra={"app_task_id": task_id, "geometry": geometry}
         )
-        r = api.app.send_request(task_id, "smart_cache", state, retries=1)
+        r = api.app.send_request(task_id, "smart_cache", state, retries=1, cookies=cookies)
         sly.logger.debug("Cache video response", extra={"response": r, "geometry": geometry})
 
 
-def cache_video(api: sly.Api, state: Dict, nn_settings: dict):
+def cache_video(api: sly.Api, state: Dict, nn_settings: dict, request: Request = None):
     geometries = state.pop("geometries", None)
     if geometries is None or sly.AnyGeometry.geometry_name() in geometries:
         geometries = set(g.geometry_nn.keys())
@@ -62,6 +64,7 @@ def cache_video(api: sly.Api, state: Dict, nn_settings: dict):
                 nn_settings,
                 geometry,
                 state,
+                cookies=request.cookies
             )
             for geometry in geometries
         ]

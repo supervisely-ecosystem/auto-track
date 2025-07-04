@@ -32,6 +32,7 @@ def start_track(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies,
     )
     return {"message": "Track task started."}
 
@@ -56,6 +57,7 @@ def start_tracking_by_detection(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies,
     )
     return {"message": "Track task started."}
 
@@ -70,12 +72,12 @@ def start_cache_video(request: Request, task: BackgroundTasks):
     if api is None:
         api = g.api
     state = request.state.state
-    task.add_task(cache_video, api, state, nn_settings)
+    task.add_task(cache_video, api, state, nn_settings, request=request)
     return {"message": "Cache video task started."}
 
 
 @server.post("/smart_segmentation")
-def smart_segmentation(request: Request):
+def smart_segmentation(request: Request, response: Response):
     sly.logger.debug("recieved call to /smart_segmentation")
     nn_settings = get_nn_settings()
     if "url" in nn_settings[g.GEOMETRY_NAME.SMARTTOOL]:
@@ -108,9 +110,14 @@ def smart_segmentation(request: Request):
             }
         state = request.state.state
         context = request.state.context
-        return g.api.app.send_request(
-            task_id, "smart_segmentation", data=state, context=context, retries=1
+        r: requests.Response = g.api.app.send_request(
+            task_id, "smart_segmentation", data=state, context=context, retries=1, cookies=request.cookies, return_response=True
         )
+        
+        if r.cookies is not None:
+            for key, val in r.cookies.items():
+                response.set_cookie(key, val)
+        return r
 
 
 @server.post("/available_geometries")
@@ -134,7 +141,7 @@ def available_geometries(request: Request):
 
 
 @server.post("/project_meta_changed")
-def project_meta_changed(request: Request):
+def project_meta_changed(request: Request, response: Response):
     """Project meta changed"""
     sly.logger.debug(
         "recieved call to /project_meta_changed", extra={"context": request.state.context}
@@ -148,6 +155,11 @@ def project_meta_changed(request: Request):
         cur_track: Track
         if cur_track.project_id == project_id:
             cur_track.update_project_meta()
+            cur_track.maybe_update_cookies(request.cookies)
+            if cur_track.cookies is not None:
+                set_cookie = cur_track.get_set_cookie()
+                if set_cookie:
+                    response.set_cookie(set_cookie["name"], set_cookie["value"], **set_cookie["params"])
 
 
 @server.post("/no_objects_tag_changed")
@@ -173,6 +185,7 @@ def no_objects_tag_changed(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies,
     )
 
 
@@ -199,6 +212,7 @@ def continue_track(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies
     )
     return {"message": "Track task started."}
 
@@ -224,6 +238,7 @@ def objects_removed(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies
     )
     return {"message": "Objects removed."}
 
@@ -249,6 +264,7 @@ def tag_removed(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies
     )
 
 
@@ -275,6 +291,7 @@ def manual_objects_removed(request: Request, task: BackgroundTasks):
         cloud_token=cloud_token,
         cloud_action_id=cloud_action_id,
         disappear_params=disappear_params,
+        cookies=request.cookies
     )
 
 
