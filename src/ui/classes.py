@@ -437,74 +437,79 @@ class GeometryCard:
     def update_nn(self):
         with self._lock:
             self.refresh_nn_app_button.loading = True
-            nns = self.deploy_app.get_neural_networks()
-            nn_selector, session_selector = self.get_selectors()
-            current_session = session_selector.get_value()
-            items = []
-            for nn in nns:
-                module_id = nn.module_id
-                sessions = g.api.app.get_sessions(
-                    g.team_id,
-                    module_id=module_id,
-                    statuses=g.APP_STATUS["ready"] + g.APP_STATUS["not_ready"],
-                    with_shared=True,
-                )
-                items.extend(
-                    [
-                        Select.Item(
-                            session.task_id,
-                            f"{nn.title}: {session.task_id}",
-                            content=EMPTY,
-                        )
-                        for session in sessions
-                    ]
-                )
-            session_selector.set(items=items)
-            if current_session in [item.value for item in items]:
-                session_selector.set_value(current_session)
-            if len(items) == 0 and g.ENV.is_cloud():
-                items = nn_selector.get_items()
-                changed = False
-                for item in items:
-                    if item.value == "app" and not item.disabled:
-                        item.disabled = True
-                        changed = True
-                if changed:
-                    nn_selector.set(items=items)
-                    nn_selector.set_value("url")
-            else:
-                items = nn_selector.get_items()
-                changed = False
-                for item in items:
-                    if item.value == "app" and item.disabled:
-                        item.disabled = False
-                        changed = True
-                if changed:
-                    nn_selector.set(items=items)
-                    nn_selector.set_value("app")
-
-            if not self.deploy_app_dialog.is_hidden():
-                self.deploy_app_dialog.hide()
-
-            if nn_selector.get_value() == "app":
-                selected_session_id = session_selector.get_value()
-                is_deployed = False
-                settings = ""
-                if selected_session_id is not None:
-                    try:
-                        selected_session = Session(g.api, selected_session_id)
-                        is_deployed = selected_session.is_model_deployed()
-                        settings = selected_session.get_default_inference_settings()
-                        settings = yaml.safe_dump(settings)
-                    except Exception:
-                        logger.warning("Failed to get inference settings", exc_info=True)
-                        settings = ""
-                    if is_deployed:
-                        self.app_status_not_ready.hide()
-                    else:
-                        self.app_status_not_ready.show()
+            try:
+                nns = self.deploy_app.get_neural_networks()
+                nn_selector, session_selector = self.get_selectors()
+                current_session = session_selector.get_value()
+                items = []
+                for nn in nns:
+                    module_id = nn.module_id
+                    sessions = g.api.app.get_sessions(
+                        g.team_id,
+                        module_id=module_id,
+                        statuses=g.APP_STATUS["ready"] + g.APP_STATUS["not_ready"],
+                        with_shared=True,
+                    )
+                    items.extend(
+                        [
+                            Select.Item(
+                                session.task_id,
+                                f"{nn.title}: {session.task_id}",
+                                content=EMPTY,
+                            )
+                            for session in sessions
+                        ]
+                    )
+                session_selector.set(items=items)
+                if current_session in [item.value for item in items]:
+                    session_selector.set_value(current_session)
+                if len(items) == 0 and g.ENV.is_cloud():
+                    items = nn_selector.get_items()
+                    changed = False
+                    for item in items:
+                        if item.value == "app" and not item.disabled:
+                            item.disabled = True
+                            changed = True
+                    if changed:
+                        nn_selector.set(items=items)
+                        nn_selector.set_value("url")
                 else:
-                    self.app_status_not_ready.hide()
-                self.inference_settings.set_text(settings)
-                self.default_inference_settings = settings
-            self.refresh_nn_app_button.loading = False
+                    items = nn_selector.get_items()
+                    changed = False
+                    for item in items:
+                        if item.value == "app" and item.disabled:
+                            item.disabled = False
+                            changed = True
+                    if changed:
+                        nn_selector.set(items=items)
+                        nn_selector.set_value("app")
+
+                if not self.deploy_app_dialog.is_hidden():
+                    self.deploy_app_dialog.hide()
+
+                if nn_selector.get_value() == "app":
+                    selected_session_id = session_selector.get_value()
+                    is_deployed = False
+                    settings = ""
+                    if selected_session_id is not None:
+                        try:
+                            selected_session = Session(g.api, selected_session_id)
+                            is_deployed = selected_session.is_model_deployed()
+                            settings = selected_session.get_default_inference_settings()
+                            settings = yaml.safe_dump(settings)
+                        except Exception:
+                            logger.warning("Failed to get inference settings", exc_info=True)
+                            settings = ""
+                        if is_deployed:
+                            self.app_status_not_ready.hide()
+                        else:
+                            self.app_status_not_ready.show()
+                    else:
+                        self.app_status_not_ready.hide()
+                    self.inference_settings.set_text(settings)
+                    self.default_inference_settings = settings
+            except:      
+                self.inference_settings.set_text("")
+                self.default_inference_settings = ""
+                self.refresh_nn_app_button.loading = False
+                raise
