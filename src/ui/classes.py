@@ -508,8 +508,9 @@ class GeometryCard:
                         self.app_status_not_ready.hide()
                     self.inference_settings.set_text(settings)
                     self.default_inference_settings = settings
-            except:      
+            except:
                 self.inference_settings.set_text("")
                 self.default_inference_settings = ""
-                self.refresh_nn_app_button.loading = False
                 raise
+            finally:
+                self.refresh_nn_app_button.loading = False
