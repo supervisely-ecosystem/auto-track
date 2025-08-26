@@ -9,7 +9,7 @@ import supervisely as sly
 # Enabling advanced debug mode.
 if sly.is_development():
     load_dotenv("local.env")
-    load_dotenv(os.path.expanduser("~/supervisely.env"))
+    load_dotenv(os.path.expanduser("~/supervisely(dev).env"))
 
 api = sly.Api()
 api.retry_count = 2

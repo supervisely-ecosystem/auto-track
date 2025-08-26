@@ -21,6 +21,23 @@ import src.tracking.inference as inference
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
 ) -> Tuple[bool, List[str]]:
+    if geometry_name == "botsort":
+        if "task_id" in nn_settings[g.GEOMETRY_NAME.DETECTOR]:
+            if nn_settings[g.GEOMETRY_NAME.DETECTOR].get("task_id", None) is None:
+                if raise_error:
+                    raise ValueError("NN settings for Detector are not specified")
+                if logger is not None:
+                    logger.warning("NN settings for Detector are not specified")
+                return False, [g.GEOMETRY_NAME.DETECTOR]
+            return True, []
+        if "url" in nn_settings[g.GEOMETRY_NAME.DETECTOR]:
+            if nn_settings[g.GEOMETRY_NAME.DETECTOR].get("url", None) is None:
+                if raise_error:
+                    raise ValueError("NN settings for Detector are not specified")
+                if logger is not None:
+                    logger.warning("NN settings for Detector are not specified")
+                return False, [g.GEOMETRY_NAME.DETECTOR]
+            return True, []
     geoms_to_validate = [geometry_name]
     if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
         geoms_to_validate.extend([g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT])
@@ -172,9 +189,13 @@ class Timeline:
         end_frame: int,
         object_info: NamedTuple = None,
         figures: List[FigureInfo] = None,
+        from_detections: bool = False,
+        track_id: int = None,
     ) -> None:
         self.track = track
         self.object_id = object_id
+        self.from_detections = from_detections
+        self.track_id = track_id
 
         self.object_info: NamedTuple = object_info
         self.update_object_info(self.object_info)
@@ -1015,8 +1036,51 @@ class Track:
                 )
         return result
 
+    def get_tracking_by_detection_figures(self, track_id, frame_from, frame_to):
+        if track_id is None:
+            return []
+        
+        detections = self.get_detections(frame_from=frame_from, frame_to=frame_to, mode=self.get_tracking_by_detection_mode())
+        if not detections:
+            return []
+        
+
+        object_id = None
+        for tl in self.timelines:
+            if tl.track_id == track_id:
+                object_id = tl.object_id
+                break
+        if object_id is None:
+            self.logger.warning(
+                "No timeline found for track_id %s", track_id, extra=self.logger_extra
+            )
+            return []
+        result = []
+        for detection, frame_index in enumerate(detections, frame_from):
+
+            detection: sly.Annotation
+            detection_track_ids = detection.custom_data
+            this_frame_figures = []
+            for label, det_track_id in zip(detection.labels, detection_track_ids):
+                if det_track_id == track_id:
+                    prediction = utils.Prediction(
+                        geometry=label.geometry,
+                        geometry_type=label.geometry.geometry_name(),
+                    )
+                    figure = utils.figure_from_prediction(
+                        prediction=prediction,
+                        figure_id=None,  # figure is not uploaded yet
+                        object_id=object_id,
+                        frame_index=frame_index,
+                        track_id=self.track_id,
+                        crop=(self.video_info.frame_height, self.video_info.frame_width),
+                    )
+                    this_frame_figures.append(figure)
+            result.append(this_frame_figures)
+        return result
+
     def predict_batch(
-        self, frame_from: int, frame_to: int, timelines_figures: List[List[FigureInfo]]
+        self, frame_from: int, frame_to: int, timelines_figures: List[List[FigureInfo]], timelines_track_ids
     ) -> List[List[List[FigureInfo]]]:
         """
         Get predictions for each figure for each timeline for a frame range.
@@ -1028,6 +1092,8 @@ class Track:
         figures_by_type: Dict[str, List[FigureInfo]] = {}
         figures_by_type_index_to_timeline_index: Dict[str, List[int]] = {}
         for timeline_index, timeline_figures in enumerate(timelines_figures):
+            if timelines_track_ids[timeline_index] is not None:
+                continue
             timeline_figures_by_type = utils.split_figures_by_type(timeline_figures)
             for geometry_type, figures in timeline_figures_by_type.items():
                 figures_by_type.setdefault(geometry_type, []).extend(figures)
@@ -1060,9 +1126,17 @@ class Track:
                 frame_from=frame_from,
                 frame_to=frame_to,
             )
+
         results = [
             [[] for _ in range(frame_to - frame_from)] for _ in range(len(timelines_figures))
         ]
+        for timeline_index, track_id in enumerate(timelines_track_ids):
+            if track_id is None:
+                continue
+            figures_for_track_id = self.get_tracking_by_detection_figures(track_id, frame_from, frame_to)
+            for frame_index, frame_figures in enumerate(figures_for_track_id, frame_from):
+                for figure in frame_figures:
+                    results[timeline_index][frame_index].append(figure)
         for geom_type, geom_predictions in results_by_geom_type.items():
             if geom_predictions is None:
                 continue
@@ -1085,13 +1159,16 @@ class Track:
         )
         enabled = enabled and self.detection_enabled
         return enabled and valid
+    
+    def get_tracking_by_detection_mode(self):
+        return self.nn_settings[g.GEOMETRY_NAME.DETECTOR]["extra_params"]["mode"]
 
     def is_disappear_enabled(self):
         valid = self.disappear_params.get("enabled", False)
         enabled = self.disappear_enabled
         return enabled and valid
 
-    def get_detections(self, frame_from: int, frame_to: int):
+    def get_detections(self, frame_from: int, frame_to: int, mode: str ="model"):
         if not self.is_detection_enabled():
             return False
         conf = (
@@ -1112,6 +1189,7 @@ class Track:
                 self.video_id,
                 x_from,
                 frame_to,
+                mode
             )
             for i, frame_detections in enumerate(detections):
                 self.detections_cache[x_from + i] = (frame_detections, conf)
@@ -1131,10 +1209,12 @@ class Track:
         detections: List[sly.Annotation] = self.get_detections(
             frame_from,
             frame_to,
+            mode=self.get_tracking_by_detection_mode()
         )
         get_detections_time = get_detections_time.get_sec()
         matching_time = TinyTimer()
         for i, frame_detections in enumerate(detections):
+            track_ids = frame_detections.custom_data
             frame_index = frame_from + i
             this_frame_predictions = []
             for timeline in self.timelines:
@@ -1144,7 +1224,8 @@ class Track:
             # match detections to predictions
             detections_boxes = []
             filtered_indexes = []
-            for idx, label in enumerate(frame_detections.labels):
+            detections_track_ids = []
+            for idx, label, track_id in zip(range(len(frame_detections.labels)), frame_detections.labels, track_ids):
                 object_class: sly.ObjClass = self.project_meta.obj_classes.get(
                     label.obj_class.name, None
                 )
@@ -1160,6 +1241,7 @@ class Track:
                     continue
                 filtered_indexes.append(idx)
                 detections_boxes.append(this_bbox)
+                detections_track_ids.append(track_id)
 
             cost_matrix = utils.iou_distance(detections_boxes, this_frame_predictions)
             cost_matrix = np.where(cost_matrix < threshold, cost_matrix, 1.0)
@@ -1170,6 +1252,9 @@ class Track:
                 unmatched_detections = [
                     frame_detections.labels[filtered_indexes[idx]]
                     for idx in unmatched_detections_indexes
+                ]
+                unmatched_detections_track_ids = [
+                    track_ids[filtered_indexes[idx]] for idx in unmatched_detections_indexes
                 ]
                 unmatched_detections_frame = frame_index
                 break
@@ -1186,6 +1271,7 @@ class Track:
         upload_time = TinyTimer()
         objects = sly.VideoObjectCollection()
         figures: List[sly.VideoFigure] = []
+        track_ids = []
         detected_obj_tm = self.project_meta.get_tag_meta("auto-detected-object")
         confidence_tm = self.project_meta.get_tag_meta("confidence")
         if confidence_tm is None:
@@ -1198,7 +1284,7 @@ class Track:
                 confidence_tm = sly.TagMeta("confidence", sly.TagValueType.ANY_NUMBER)
                 self.project_meta = self.project_meta.add_tag_meta(confidence_tm)
             self.api.project.update_meta(self.project_id, self.project_meta)
-        for label in unmatched_detections:
+        for label, track_id in (unmatched_detections, unmatched_detections_track_ids):
             object_class: sly.ObjClass = self.project_meta.obj_classes.get(
                 label.obj_class.name, None
             )
@@ -1225,6 +1311,7 @@ class Track:
             )
             objects = objects.add(video_object)
             figures.append(figure)
+            track_ids.append(track_id)
 
         key_id_map = sly.KeyIdMap()
         objects_ids = self.api.video.object.append_bulk(self.video_id, objects, key_id_map)
@@ -1240,7 +1327,7 @@ class Track:
             ),
             key=lambda x: objects_ids.index(x.id),
         )
-        for object_info, figure in zip(object_infos, figures):
+        for object_info, figure, track_id in zip(object_infos, figures, track_ids):
             timeline = Timeline(
                 self,
                 object_info.id,
@@ -1248,6 +1335,8 @@ class Track:
                 self.get_frame_range(unmatched_detections_frame)[1],
                 object_info=object_info,
                 figures=[figure],
+                from_detections=True,
+                track_id=track_id
             )
             self.timelines.append(timeline)
         init_timelines_time = init_timelines_time.get_sec()
@@ -1522,11 +1611,14 @@ class Track:
                 self.withdraw_billing(transaction_id, 1)
             initial_detection_time = initial_detection_time.get_sec()
 
+            timelines_track_ids = []
             wait_update_time = TinyTimer()
             with self._lock:
                 # Get batch data
                 self.updates_pending = False
                 frame_from, frame_to, timelines_figures, timelines_indexes = self.get_batch()
+                for i, timeline_index in enumerate(timelines_indexes):
+                    timelines_track_ids.append(self.timelines[timeline_index].track_id)
 
             wait_update_time = wait_update_time.get_sec()
 
@@ -1549,7 +1641,7 @@ class Track:
 
             # load detections in parallel
             if self.is_detection_enabled():
-                threading.Thread(target=self.get_detections, args=(frame_from, frame_to)).start()
+                threading.Thread(target=self.get_detections, args=(frame_from, frame_to, self.get_tracking_by_detection_mode())).start()
 
             # billing reserve
             frames_count = frame_to - frame_from
@@ -1560,7 +1652,7 @@ class Track:
 
             # run iteration
             batch_prediction_time, batch_predictions = utils.time_it(
-                self.predict_batch, frame_from, frame_to, timelines_figures
+                self.predict_batch, frame_from, frame_to, timelines_figures, timelines_track_ids
             )
             batch_predictions: List[List[List[FigureInfo]]]
 

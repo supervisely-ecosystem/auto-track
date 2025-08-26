@@ -67,6 +67,16 @@ GEOMETRIES = (
                     "description": "If enabled, detector NN will be used to detect objects and track them",
                     "default": True,
                 },
+                "mode": {
+                    "type": "select",
+                    "title": "Tracking by detection mode",
+                    "description": "Select the mode for tracking by detection. If 'tracker Model' is selected, the model selected above will be used to track objects. If 'BoT-SORT' is selected, BoT-SORT algorithm will be used for tracking.",
+                    "items": [
+                        {"value": "model", "label": "tracker Model"},
+                        {"value": "botsort", "label": "BoT-SORT"},
+                    ],
+                    "default": "botsort",
+                },
                 "threshold": {
                     "type": "float",
                     "title": "Matching Threshold",

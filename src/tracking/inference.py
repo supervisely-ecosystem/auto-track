@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
+from supervisely.nn.model.model_api import ModelAPI
+
 
 import src.utils as utils
 
@@ -458,15 +460,16 @@ def predict_smarttool(
     return results
 
 
-def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to):
+def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to, mode):
+    if mode == "botsort":
+        tracker = "botsort"
+    else:
+        tracker = None
     if "task_id" in nn_settings:
-        session = sly.nn.inference.Session(
-            api,
-            nn_settings["task_id"],
-            inference_settings=nn_settings.get("inference_settings", {}),
-        )
-        detections = session.inference_video_id(video_id, frame_from, frame_to - frame_from + 1)
-        return detections
-
+        model_api = ModelAPI(api=api, task_id=nn_settings["task_id"])
     elif "url" in nn_settings:
-        return []
+        model_api = ModelAPI(api=api, url=nn_settings["url"])
+    else:
+        raise ValueError("Either `task_id` or `url` must be passed in nn_settings.")
+    predictions = model_api.predict(video_id=video_id, start_frame=frame_from, end_frame=frame_to, tracker=tracker)
+    return [pred.annotation for pred in predictions]

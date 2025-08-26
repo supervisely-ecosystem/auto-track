@@ -178,6 +178,8 @@ def get_nn_settings():
             for name, widget in extra_params.items():
                 if isinstance(widget, Checkbox):
                     settings[geometry_name]["extra_params"][name] = widget.is_checked()
+                elif isinstance(widget, Switch):
+                    settings[geometry_name]["extra_params"][name] = widget.is_switched()
                 elif hasattr(widget, "get_value"):
                     settings[geometry_name]["extra_params"][name] = widget.get_value()
 

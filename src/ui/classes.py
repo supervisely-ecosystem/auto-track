@@ -18,6 +18,7 @@ from supervisely.app.widgets import (
     Flexbox,
     Editor,
     NotificationBox,
+    Switch,
 )
 from supervisely import logger
 from supervisely.nn.inference.session import Session
@@ -328,6 +329,29 @@ class GeometryCard:
                     box_type=details.get("notification_type", "info"),
                 )
                 extra_params_widgets[name] = (widget, widget_field)
+            elif details["type"] == "switch":
+                widget = Switch(
+                    switched=details.get("default", False),
+                    on_text=details.get("on_text", None),
+                    off_text=details.get("off_text", None),
+                )
+                widget_field = Field(
+                    content=widget,
+                    title=details["title"],
+                    description=details["description"],
+                )
+                extra_params_widgets[name] = (widget, widget_field)
+            elif details["type"] == "select":
+                items = [Select.Item(**item) for item in details.get("items", [])]
+                widget = Select(items=items, multiple=details.get("multiple", False))
+                if details.get("default") is not None:
+                    widget.set_value(details["default"])
+                widget_field = Field(
+                    content=widget,
+                    title=details["title"],
+                    description=details["description"],
+                )
+                extra_params_widgets[name] = (widget, widget_field)
 
         self.extra_params: Dict[str, Union[Checkbox, InputNumber]] = {
             name: widget for name, (widget, _) in extra_params_widgets.items()
@@ -423,7 +447,7 @@ class GeometryCard:
     def get_selectors(self) -> Tuple[Select, Select]:
         return self.select_nn, self.select_nn_app
 
-    def get_extra_params(self) -> Dict[str, Union[Checkbox, InputNumber]]:
+    def get_extra_params(self) -> Dict[str, Union[Checkbox, InputNumber, Switch, Select]]:
         return self.extra_params
 
     def get_inference_settings(self) -> Editor:
