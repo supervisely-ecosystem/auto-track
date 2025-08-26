@@ -471,5 +471,5 @@ def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, f
         model_api = ModelAPI(api=api, url=nn_settings["url"])
     else:
         raise ValueError("Either `task_id` or `url` must be passed in nn_settings.")
-    predictions = model_api.predict(video_id=video_id, start_frame=frame_from, end_frame=frame_to, tracking=tracker == "botsort")
+    predictions = model_api.predict(video_id=video_id, start_frame=frame_from, num_frames=frame_to-frame_from, tracking=tracker == "botsort")
     return [pred.annotation for pred in predictions]
