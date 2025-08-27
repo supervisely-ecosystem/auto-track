@@ -1140,7 +1140,7 @@ class Track:
             if track_id is None:
                 continue
             figures_for_track_id = self.get_tracking_by_detection_figures(track_id, frame_from, frame_to)
-            for frame_index, frame_figures in enumerate(figures_for_track_id, frame_from):
+            for frame_index, frame_figures in enumerate(figures_for_track_id, 0):
                 for figure in frame_figures:
                     results[timeline_index][frame_index].append(figure)
         for geom_type, geom_predictions in results_by_geom_type.items():
