@@ -1139,7 +1139,7 @@ class Track:
         for timeline_index, track_id in enumerate(timelines_track_ids):
             if track_id is None:
                 continue
-            figures_for_track_id = self.get_tracking_by_detection_figures(track_id, frame_from, frame_to)
+            figures_for_track_id = self.get_tracking_by_detection_figures(track_id, frame_from+1, frame_to)
             for frame_index, frame_figures in enumerate(figures_for_track_id, 0):
                 for figure in frame_figures:
                     results[timeline_index][frame_index].append(figure)
