@@ -821,6 +821,7 @@ class Track:
                     raise_error=False,
                     logger=self.logger,
                 )[0]
+                or self.timelines[tl_batch[3]].track_id is not None
             ]
         tl_batches = [tl_batch for tl_batch in tl_batches if len(tl_batch[2]) > 0]
         # Filter out finished timelines
