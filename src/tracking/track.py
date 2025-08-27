@@ -1062,8 +1062,7 @@ class Track:
             )
             return []
         result = []
-        for detection, frame_index in enumerate(detections, frame_from):
-
+        for frame_index, detection in enumerate(detections, frame_from):
             detection: sly.Annotation
             detection_track_ids = detection.custom_data
             this_frame_figures = []
