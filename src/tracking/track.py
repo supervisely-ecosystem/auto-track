@@ -1069,7 +1069,7 @@ class Track:
             for label, det_track_id in zip(detection.labels, detection_track_ids):
                 if det_track_id == track_id:
                     prediction = utils.Prediction(
-                        geometry=label.geometry,
+                        geometry_data=label.geometry.to_json(),
                         geometry_type=label.geometry.geometry_name(),
                     )
                     figure = utils.figure_from_prediction(
