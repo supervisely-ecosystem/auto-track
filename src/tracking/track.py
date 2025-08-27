@@ -1284,7 +1284,7 @@ class Track:
                 confidence_tm = sly.TagMeta("confidence", sly.TagValueType.ANY_NUMBER)
                 self.project_meta = self.project_meta.add_tag_meta(confidence_tm)
             self.api.project.update_meta(self.project_id, self.project_meta)
-        for label, track_id in (unmatched_detections, unmatched_detections_track_ids):
+        for label, track_id in zip(unmatched_detections, unmatched_detections_track_ids):
             object_class: sly.ObjClass = self.project_meta.obj_classes.get(
                 label.obj_class.name, None
             )
