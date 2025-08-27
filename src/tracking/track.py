@@ -536,6 +536,7 @@ class Timeline:
             "object_id": self.object_id,
             "progress": f"{self.get_progress_current()} / {self.get_progress_total()}",
             "tracklets": [tracklet.log_data() for tracklet in self.tracklets],
+            "detection_track_id": self.track_id,
         }
 
 
@@ -699,6 +700,10 @@ class Track:
                 self.logger.debug("Trying to init timelines with empty object_ids")
                 return
             self.init_timelines_from_detections(self.frame_ranges[0][0], self.frame_ranges[0][0] + self.batch_size)
+            self.logger.debug(
+                "inited timelines",
+                extra={**self.logger_extra, "timelines": [tl.log_data() for tl in self.timelines]},
+            )
             return
         # Get common data for all timelines to avoid multiple requests
         # Figures
