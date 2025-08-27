@@ -1556,6 +1556,8 @@ class Track:
         skipping_strs = set()
         tracklets_to_remove = []
         for timeline in self.timelines:
+            if timeline.track_id is not None:
+                continue
             for tracklet in timeline.tracklets:
                 if tracklet.last_tracked is not None:
                     remove_n = 0
