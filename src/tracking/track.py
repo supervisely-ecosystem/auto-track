@@ -1107,6 +1107,7 @@ class Track:
                 )
 
         geom_types = list(figures_by_type.keys())
+        results_by_geom_type: Dict[str, List[List[FigureInfo]]] = {}
         if len(geom_types) > 0:
             with ThreadPoolExecutor(len(geom_types)) as executor:
                 tasks_by_geom_type: Dict[str, Future] = {}
@@ -1121,7 +1122,6 @@ class Track:
                         frame_to=frame_to,
                     )
                     tasks_by_geom_type[geom_type] = task
-                results_by_geom_type: Dict[str, List[List[FigureInfo]]] = {}
                 for geom_type, task in tasks_by_geom_type.items():
                     results_by_geom_type[geom_type] = task.result()
         if g.GEOMETRY_NAME.SMARTTOOL in geom_types:
