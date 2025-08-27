@@ -1617,8 +1617,9 @@ class Track:
                 # Get batch data
                 self.updates_pending = False
                 frame_from, frame_to, timelines_figures, timelines_indexes = self.get_batch()
-                for i, timeline_index in enumerate(timelines_indexes):
-                    timelines_track_ids.append(self.timelines[timeline_index].track_id)
+                if timelines_indexes:
+                    for i, timeline_index in enumerate(timelines_indexes):
+                        timelines_track_ids.append(self.timelines[timeline_index].track_id)
 
             wait_update_time = wait_update_time.get_sec()
 
