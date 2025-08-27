@@ -1108,22 +1108,23 @@ class Track:
                 )
 
         geom_types = list(figures_by_type.keys())
-        with ThreadPoolExecutor(len(geom_types)) as executor:
-            tasks_by_geom_type: Dict[str, Future] = {}
-            for geom_type in geom_types:
-                if geom_type == g.GEOMETRY_NAME.SMARTTOOL:
-                    continue
-                task = executor.submit(
-                    self.run_geometry,
-                    geometry_type=geom_type,
-                    figures=figures_by_type[geom_type],
-                    frame_from=frame_from,
-                    frame_to=frame_to,
-                )
-                tasks_by_geom_type[geom_type] = task
-            results_by_geom_type: Dict[str, List[List[FigureInfo]]] = {}
-            for geom_type, task in tasks_by_geom_type.items():
-                results_by_geom_type[geom_type] = task.result()
+        if len(geom_types) > 0:
+            with ThreadPoolExecutor(len(geom_types)) as executor:
+                tasks_by_geom_type: Dict[str, Future] = {}
+                for geom_type in geom_types:
+                    if geom_type == g.GEOMETRY_NAME.SMARTTOOL:
+                        continue
+                    task = executor.submit(
+                        self.run_geometry,
+                        geometry_type=geom_type,
+                        figures=figures_by_type[geom_type],
+                        frame_from=frame_from,
+                        frame_to=frame_to,
+                    )
+                    tasks_by_geom_type[geom_type] = task
+                results_by_geom_type: Dict[str, List[List[FigureInfo]]] = {}
+                for geom_type, task in tasks_by_geom_type.items():
+                    results_by_geom_type[geom_type] = task.result()
         if g.GEOMETRY_NAME.SMARTTOOL in geom_types:
 
             results_by_geom_type[g.GEOMETRY_NAME.SMARTTOOL] = self.run_geometry(
