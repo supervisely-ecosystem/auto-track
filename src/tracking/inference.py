@@ -505,6 +505,8 @@ def get_detections(
         num_frames=frame_to - frame_from + 1,
         tracking=tracker == "botsort",
         inference_request_uuid=inference_request_uuid,
+        continue_inference_request=mode=="botsort",
+        inference_request_ttl = 3600,
     ) as session:
         inference_request_uuid = session.inference_request_uuid
         predictions = list(session)
