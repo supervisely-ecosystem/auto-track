@@ -94,7 +94,9 @@ def _smart_segmentation_with_app(
                 "video": {"video_id": video_id, "frame_index": frame_index + i + 1},
                 "request_uid": uuid.uuid4().hex,
             }
-            for i, (crop, positive, negative) in enumerate(zip(crops, positives, negatives))
+            for i, (crop, positive, negative) in enumerate(
+                zip(crops, positives, negatives)
+            )
         ]
     }
     r_data = api.task.send_request(
@@ -148,7 +150,9 @@ def _smart_segmentation_by_url(
                 "video": {"video_id": video_id, "frame_index": frame_index + i + 1},
                 "request_uid": uuid.uuid4().hex,
             }
-            for i, (crop, positive, negative) in enumerate(zip(crops, positives, negatives))
+            for i, (crop, positive, negative) in enumerate(
+                zip(crops, positives, negatives)
+            )
         ]
     }
     r = requests.post(
@@ -200,7 +204,9 @@ def predict_by_url(
         },
     )
 
-    geometries = [{"type": geometry_type, "data": geom_data} for geom_data in geometries_data]
+    geometries = [
+        {"type": geometry_type, "data": geom_data} for geom_data in geometries_data
+    ]
     context = {
         "videoId": video_id,
         "frameIndex": frame_index,
@@ -209,7 +215,11 @@ def predict_by_url(
     }
     response = requests.post(
         f"{nn_url}/track-api",
-        json={"context": context, "server_address": api.server_address, "api_token": api.token},
+        json={
+            "context": context,
+            "server_address": api.server_address,
+            "api_token": api.token,
+        },
         timeout=60,
     )
     response.raise_for_status()
@@ -238,7 +248,9 @@ def predict_with_app(
     frames_count: int,
 ) -> List[List[utils.Prediction]]:
     """Run inference using the NN model Supervisely app session."""
-    geometries = [{"type": geometry_type, "data": geometry} for geometry in geometries_data]
+    geometries = [
+        {"type": geometry_type, "data": geometry} for geometry in geometries_data
+    ]
     data = {
         "videoId": video_id,
         "frameIndex": frame_index,
@@ -357,13 +369,17 @@ def predict_smarttool(
     crop_predictions = crop_predictions_task.result()
     neg_predictions = []
     for figure_idx in range(len(figure_metas)):
-        points = [sly.Point(point[1], point[0]) for point in figure_negatives[figure_idx]]
+        points = [
+            sly.Point(point[1], point[0]) for point in figure_negatives[figure_idx]
+        ]
         src_rect = figure_crops[figure_idx]
         for frame_idx in range(frames_count):
             dst_rect = sly.Rectangle.from_json(
                 crop_predictions[frame_idx][figure_idx].geometry_data
             )
-            points = utils.move_points_relative(src_rect=src_rect, points=points, dst_rect=dst_rect)
+            points = utils.move_points_relative(
+                src_rect=src_rect, points=points, dst_rect=dst_rect
+            )
             if len(neg_predictions) <= frame_idx:
                 neg_predictions.append([])
             neg_predictions[frame_idx].extend(
@@ -448,8 +464,12 @@ def predict_smarttool(
                 meta=utils.Meta(
                     smi=utils.SmartToolInput(
                         crop=sly.Rectangle.from_json(crops[0].geometry_data),
-                        positive=[sly.Point.from_json(p.geometry_data) for p in pos_points],
-                        negative=[sly.Point.from_json(n.geometry_data) for n in neg_points],
+                        positive=[
+                            sly.Point.from_json(p.geometry_data) for p in pos_points
+                        ],
+                        negative=[
+                            sly.Point.from_json(n.geometry_data) for n in neg_points
+                        ],
                         visible=True,
                     ),
                     track_id=track_id,
@@ -460,7 +480,15 @@ def predict_smarttool(
     return results
 
 
-def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to, mode, inference_request_uuid=None):
+def get_detections(
+    api: sly.Api,
+    nn_settings: Dict,
+    video_id: int,
+    frame_from,
+    frame_to,
+    mode,
+    inference_request_uuid=None,
+):
     if mode == "botsort":
         tracker = "botsort"
     else:
@@ -471,5 +499,13 @@ def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, f
         model_api = ModelAPI(api=api, url=nn_settings["url"])
     else:
         raise ValueError("Either `task_id` or `url` must be passed in nn_settings.")
-    predictions = model_api.predict(video_id=video_id, start_frame=frame_from, num_frames=frame_to-frame_from+1, tracking=tracker == "botsort", inference_request_uuid=inference_request_uuid)
-    return [pred.annotation for pred in predictions]
+    with model_api.predict_detached(
+        video_id=video_id,
+        start_frame=frame_from,
+        num_frames=frame_to - frame_from + 1,
+        tracking=tracker == "botsort",
+        inference_request_uuid=inference_request_uuid,
+    ) as session:
+        inference_request_uuid = session.inference_request_uuid
+        predictions = list(session)
+    return [pred.annotation for pred in predictions], inference_request_uuid

@@ -658,6 +658,7 @@ class Track:
         self.detections_cache = {}
         self.detection_enabled = detection_enabled
         self.disappear_enabled = disappear_enabled
+        self.detection_inference_request_uuid = None
 
         self.no_object_tag_ids = [
             t.id
@@ -1189,14 +1190,17 @@ class Track:
                 x_from = x
                 break
         if x_from is not None:
-            detections: List[sly.Annotation] = inference.get_detections(
+            detections, inference_request_uuid = inference.get_detections(
                 self.api,
                 self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
                 self.video_id,
                 x_from,
                 frame_to,
-                mode
+                mode,
+                self.detection_inference_request_uuid
             )
+            if self.get_tracking_by_detection_mode() == "botsort":
+                self.detection_inference_request_uuid = inference_request_uuid
             for i, frame_detections in enumerate(detections):
                 self.detections_cache[x_from + i] = (frame_detections, conf)
         return [self.detections_cache[x][0] for x in range(frame_from, frame_to + 1)]
