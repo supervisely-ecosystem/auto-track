@@ -652,6 +652,7 @@ class Track:
         self.updates: List[Update] = []
         self.updates_pending = False
         self._lock = threading.Lock()
+        self._detections_lock = threading.Lock()
         self._upload_queue = queue.Queue()
         self._upload_thread = None
         self.prevent_upload_objects = []
@@ -1184,25 +1185,26 @@ class Track:
             .get("confidence", 0.5)
         )
 
-        x_from = None
-        for x in range(frame_from, frame_to + 1):
-            if (x not in self.detections_cache) or (self.detections_cache[x][1] != conf):
-                x_from = x
-                break
-        if x_from is not None:
-            detections, inference_request_uuid = inference.get_detections(
-                self.api,
-                self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
-                self.video_id,
-                x_from,
-                frame_to,
-                mode,
-                self.detection_inference_request_uuid
-            )
-            if self.get_tracking_by_detection_mode() == "botsort":
-                self.detection_inference_request_uuid = inference_request_uuid
-            for i, frame_detections in enumerate(detections):
-                self.detections_cache[x_from + i] = (frame_detections, conf)
+        with self._detections_lock:
+            x_from = None
+            for x in range(frame_from, frame_to + 1):
+                if (x not in self.detections_cache) or (self.detections_cache[x][1] != conf):
+                    x_from = x
+                    break
+            if x_from is not None:
+                detections, inference_request_uuid = inference.get_detections(
+                    self.api,
+                    self.nn_settings[g.GEOMETRY_NAME.DETECTOR],
+                    self.video_id,
+                    x_from,
+                    frame_to,
+                    mode,
+                    self.detection_inference_request_uuid
+                )
+                if self.get_tracking_by_detection_mode() == "botsort":
+                    self.detection_inference_request_uuid = inference_request_uuid
+                for i, frame_detections in enumerate(detections):
+                    self.detections_cache[x_from + i] = (frame_detections, conf)
         return [self.detections_cache[x][0] for x in range(frame_from, frame_to + 1)]
 
     def init_timelines_from_detections(self, frame_from: int, frame_to: int):
