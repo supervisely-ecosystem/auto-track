@@ -9,7 +9,7 @@ import supervisely as sly
 # Enabling advanced debug mode.
 if sly.is_development():
     load_dotenv("local.env")
-    load_dotenv(os.path.expanduser("~/supervisely.env"))
+    load_dotenv(os.path.expanduser("~/supervisely(dev).env"))
 
 api = sly.Api()
 api.retry_count = 2
@@ -213,9 +213,17 @@ class NN:
         cloud_url="",
         params={},
     )
+    YOLO = NeuralNetwork(
+        name="yolo",
+        module_id=api.app.get_ecosystem_module_id("supervisely-ecosystem/yolo/supervisely_integration/serve"),
+        title="YOLO",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
-nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack]
+nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack, NN.YOLO]
 geometry_nn = {
     GEOMETRY_NAME.RECTANGLE: [NN.MCITrack, NN.MIX_FORMER],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
@@ -224,7 +232,7 @@ geometry_nn = {
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
     GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2],
     GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2],
-    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8],
+    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8, NN.YOLO],
 }
 
 
