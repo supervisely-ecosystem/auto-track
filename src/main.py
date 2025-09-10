@@ -47,7 +47,7 @@ def start_tracking_by_detection(request: Request, task: BackgroundTasks):
     task_id = nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("task_id", None)
     if task_id is None:
         raise ValueError("Detection model is not selected")
-    return api.task.send_request(task_id, "POST", "tracking_by_detection", data=context)
+    return api.task.send_request(task_id, "tracking_by_detection", data=context)
     return {"message": "Track task started."}
 
 
