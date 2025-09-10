@@ -40,23 +40,14 @@ def start_track(request: Request, task: BackgroundTasks):
 def start_tracking_by_detection(request: Request, task: BackgroundTasks):
     sly.logger.debug("recieved call to /tracking_by_detection")
     nn_settings = get_nn_settings()
-    disappear_params = get_disappear_parameters()
     api = request.state.api
     if api is None:
         api = g.api
     context = request.state.context
-    cloud_token = request.headers.get("x-sly-cloud-token", None)
-    cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
-    context["trackingByDetection"] = True
-    task.add_task(
-        track,
-        api,
-        context,
-        nn_settings,
-        cloud_token=cloud_token,
-        cloud_action_id=cloud_action_id,
-        disappear_params=disappear_params,
-    )
+    task_id = nn_settings.get(g.GEOMETRY_NAME.DETECTOR, {}).get("task_id", None)
+    if task_id is None:
+        raise ValueError("Detection model is not selected")
+    return api.task.send_request(task_id, "POST", "tracking_by_detection", data=context)
     return {"message": "Track task started."}
 
 
