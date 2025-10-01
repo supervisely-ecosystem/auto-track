@@ -221,9 +221,17 @@ class NN:
         cloud_url="",
         params={},
     )
+    DevelopAndDebug = NeuralNetwork(
+        name="develop_and_debug",
+        module_id=api.app.get_ecosystem_module_id("supervisely-ecosystem/while-true-script-v2"),
+        title="Develop and Debug",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
-nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack, NN.YOLO]
+nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack, NN.YOLO, NN.DevelopAndDebug]
 geometry_nn = {
     GEOMETRY_NAME.RECTANGLE: [NN.MCITrack, NN.MIX_FORMER],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
@@ -232,7 +240,7 @@ geometry_nn = {
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
     GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2],
     GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2],
-    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8, NN.YOLO],
+    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8, NN.YOLO, NN.DevelopAndDebug],
 }
 
 
