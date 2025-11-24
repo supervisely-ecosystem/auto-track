@@ -1295,6 +1295,7 @@ class Track:
 
     def _remove_figures(self, figures: List[FigureInfo]):
         existing = self.api.video.figure.get_by_ids(self.dataset_id, [fig.id for fig in figures])
+        existing = [fig for fig in existing if fig is not None and fig.entity_id == self.video_id]
         try:
             self.api.video.figure.remove_batch([fig.id for fig in existing])
             return
