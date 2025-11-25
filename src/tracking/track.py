@@ -185,6 +185,7 @@ class Timeline:
                     {"field": "objectId", "operator": "=", "value": self.object_id},
                     {"field": "startFrame", "operator": ">=", "value": start_frame},
                     {"field": "endFrame", "operator": "<=", "value": end_frame},
+                    {"field": "entityId", "operator": "=", "value": self.track.video_id}
                 ],
             )
         self.key_figures: Dict[int, List[FigureInfo]] = find_key_figures(figures)
