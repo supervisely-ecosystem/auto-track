@@ -185,6 +185,7 @@ class Timeline:
                     {"field": "objectId", "operator": "=", "value": self.object_id},
                     {"field": "startFrame", "operator": ">=", "value": start_frame},
                     {"field": "endFrame", "operator": "<=", "value": end_frame},
+                    {"field": "entityId", "operator": "=", "value": self.track.video_id}
                 ],
             )
         self.key_figures: Dict[int, List[FigureInfo]] = find_key_figures(figures)
@@ -1295,6 +1296,7 @@ class Track:
 
     def _remove_figures(self, figures: List[FigureInfo]):
         existing = self.api.video.figure.get_by_ids(self.dataset_id, [fig.id for fig in figures])
+        existing = [fig for fig in existing if fig is not None and fig.entity_id == self.video_id]
         try:
             self.api.video.figure.remove_batch([fig.id for fig in existing])
             return
