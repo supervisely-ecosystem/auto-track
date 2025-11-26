@@ -188,6 +188,9 @@ class Timeline:
                     {"field": "entityId", "operator": "=", "value": self.track.video_id}
                 ],
             )
+        logger.debug("Got figures for object: %s", self.object_id, extra={"figures": [{"id": figure.id, "entity_id": figure.entity_id, "frame_index": figure.frame_index} for figure in figures]})
+        figures = [fig for fig in figures if fig.entity_id == self.track.video_id]
+        logger.debug("Filtered figures for object: %s", self.object_id, extra={"figures": [{"id": figure.id, "entity_id": figure.entity_id, "frame_index": figure.frame_index} for figure in figures]})
         self.key_figures: Dict[int, List[FigureInfo]] = find_key_figures(figures)
         self.no_object_frames: Set[int] = set()
         self.update_no_object_frames()
