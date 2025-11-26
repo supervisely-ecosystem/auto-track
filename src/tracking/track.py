@@ -345,6 +345,7 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
+                {"field": "entityId", "operator": "=", "value": self.track.video_id}
             ],
         )
         key_frame_figures = {
@@ -393,6 +394,7 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index + frames_count},
+                {"field": "entityId", "operator": "=", "value": self.track.video_id}
             ],
         )
         key_frame_figures = find_key_figures(figures)
@@ -439,6 +441,7 @@ class Timeline:
                                 {"field": "objectId", "operator": "=", "value": self.object_id},
                                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                                 {"field": "endFrame", "operator": "<=", "value": frame_index},
+                                {"field": "entityId", "operator": "=", "value": self.track.video_id}
                             ],
                         )
                     tracklet.last_tracked = (frame_index, frame_figures)
@@ -450,6 +453,7 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
+                {"field": "entityId", "operator": "=", "value": self.video_id}
             ],
         )
         key_frame_figures = find_key_figures(frame_figures)
@@ -692,6 +696,7 @@ class Track:
                 {"field": "objectId", "operator": "in", "value": self.object_ids},
                 {"field": "startFrame", "operator": ">=", "value": self.frame_ranges[0][0]},
                 {"field": "endFrame", "operator": "<=", "value": self.frame_ranges[0][1]},
+                {"field": "entityId", "operator": "=", "value": self.video_id},
             ],
         ):
             all_figures_dict.setdefault(figure.object_id, []).append(figure)
@@ -1290,6 +1295,7 @@ class Track:
                 {"field": "objectId", "operator": "in", "value": object_ids},
                 {"field": "startFrame", "operator": ">=", "value": frame_range[0]},
                 {"field": "endFrame", "operator": "<=", "value": frame_range[1]},
+                {"field": "entityId", "operator": "=", "value": self.video_id}
             ],
         )
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
@@ -1436,6 +1442,7 @@ class Track:
                 {"field": "objectId", "operator": "in", "value": object_ids},
                 {"field": "startFrame", "operator": ">=", "value": frame_range[0]},
                 {"field": "endFrame", "operator": "<=", "value": frame_range[1]},
+                {"field": "entityId", "operator": "=", "value": self.video_id}
             ],
         )
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
