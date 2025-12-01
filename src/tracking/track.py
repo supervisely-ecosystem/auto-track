@@ -1451,6 +1451,9 @@ class Track:
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
 
+        self.refresh_progress()
+        self.progress.notify()
+
     def _upload_loop(self):
         while not self._upload_queue.empty():
             predictions, frame_range, transaction_id = self._upload_queue.get()
@@ -1612,8 +1615,6 @@ class Track:
                     frame_range = fr
                     break
             self.progress.frame_range = frame_range
-            self.refresh_progress()
-            self.progress.notify()
             update_progress_time = update_progress_time.get_sec()
 
             self.logger.debug(
