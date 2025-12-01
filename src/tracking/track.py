@@ -1304,6 +1304,7 @@ class Track:
     def _remove_figures(self, figures: List[FigureInfo]):
         existing = self.api.video.figure.get_by_ids(self.dataset_id, [fig.id for fig in figures])
         existing = [fig for fig in existing if fig is not None and fig.entity_id == self.video_id]
+        logger.debug("Removing %s figures", len(existing), extra={**self.logger_extra, "figures": [fig.id for fig in existing]})
         try:
             self.api.video.figure.remove_batch([fig.id for fig in existing])
             return
@@ -1444,13 +1445,17 @@ class Track:
             ],
         )
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
+        remove_thread = None
         if figures_to_delete:
-            threading.Thread(target=self._remove_figures, args=(figures_to_delete,)).start()
+            remove_thread = threading.Thread(target=self._remove_figures, args=(figures_to_delete,))
+            remove_thread.start()
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
 
+        if remove_thread is not None:
+            remove_thread.join()
         self.refresh_progress()
         self.progress.notify()
 
