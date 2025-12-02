@@ -1445,17 +1445,13 @@ class Track:
             ],
         )
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
-        remove_thread = None
         if figures_to_delete:
-            remove_thread = threading.Thread(target=self._remove_figures, args=(figures_to_delete,))
-            remove_thread.start()
+            self._remove_figures(figures_to_delete)
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
 
-        if remove_thread is not None:
-            remove_thread.join()
         self.refresh_progress()
         self.progress.notify()
 
