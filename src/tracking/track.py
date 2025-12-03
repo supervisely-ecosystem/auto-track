@@ -735,6 +735,7 @@ class Track:
     def validate_timelines(self):
         if self.is_detection_enabled():
             return True
+        logger.debug("Validating timelines for track %s", self.track_id, extra={"nn_settings": self.nn_settings, **self.logger_extra})
         for timeline in self.timelines:
             logger.debug("Validating timeline %s", timeline.object_id, extra=timeline.log_data())
             for tracklet in timeline.tracklets:
