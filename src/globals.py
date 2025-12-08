@@ -213,17 +213,25 @@ class NN:
         cloud_url="",
         params={},
     )
+    SAM3 = NeuralNetwork(
+        name="sam3",
+        module_id=api.app.get_ecosystem_module_id("supervisely-ecosystem/sam3/serve"),
+        title="Segment Anything 3",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
-nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack]
+nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack, NN.SAM3]
 geometry_nn = {
-    GEOMETRY_NAME.RECTANGLE: [NN.MCITrack, NN.MIX_FORMER],
+    GEOMETRY_NAME.RECTANGLE: [NN.MCITrack, NN.MIX_FORMER, NN.SAM3],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
     GEOMETRY_NAME.POLYLINE: [NN.CO_TRACKER],
     GEOMETRY_NAME.POLYGON: [NN.CO_TRACKER],
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
-    GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2],
-    GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2],
+    GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2, NN.SAM3],
+    GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2, NN.SAM3],
     GEOMETRY_NAME.DETECTOR: [NN.YOLOV8],
 }
 
