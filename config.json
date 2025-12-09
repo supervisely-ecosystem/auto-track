@@ -3,8 +3,8 @@
   "version": "2.0.0",
   "name": "Auto Track",
   "description": "Tracking settings for video annotation tool",
-  "docker_image": "supervisely/auto-track:1.0.5",
-  "instance_version": "6.12.17",
+  "docker_image": "supervisely/auto-track:1.0.6",
+  "instance_version": "6.15.2",
   "categories": [
     "videos",
     "labeling",
@@ -21,10 +21,7 @@
   "poster": "https://github.com/supervisely-ecosystem/auto-track/assets/119248312/c372ff77-4025-4e55-80b8-e821e31868e3",
   "entrypoint": "python -m uvicorn src.main:app --host 0.0.0.0 --port 8000",
   "port": 8000,
-  "session_tags": [
-    "sly_video_tracking",
-    "sly_smart_annotation"
-  ],
+  "session_tags": ["sly_video_tracking", "sly_smart_annotation"],
   "allowed_shapes": [
     "rectangle",
     "bitmap",
@@ -36,8 +33,10 @@
   ],
   "community_agent": false,
   "is_auto_track": true,
-  "access_restriction": [{
-        "instance": "community_free",
-        "message": "The best object trackers are already deployed in the Supervisely Cloud and are available for auto-labeling to all platform users. The number of API calls and the ability to run this app on your own agent (GPU) are limited for Free accounts. To increase usage limits or run the app on your GPU, switch to the <a href=\"/billing\">Pro</a> plan or request the <a href=\"https://supervisely.com/contact-us/\" target=\"_blank\">Enterprise</a> Edition."
-  }]
+  "access_restriction": [
+    {
+      "instance": "community_free",
+      "message": "The best object trackers are already deployed in the Supervisely Cloud and are available for auto-labeling to all platform users. The number of API calls and the ability to run this app on your own agent (GPU) are limited for Free accounts. To increase usage limits or run the app on your GPU, switch to the <a href=\"/billing\">Pro</a> plan or request the <a href=\"https://supervisely.com/contact-us/\" target=\"_blank\">Enterprise</a> Edition."
+    }
+  ]
 }
