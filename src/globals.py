@@ -245,4 +245,6 @@ def get_url_for_geometry(geometry_name: str) -> str:
     nn = geometry_nn.get(geometry_name, None)
     if nn is None:
         raise KeyError(f"Unknown geometry name: {geometry_name}")
+    if len(nn) == 0:
+        return ""
     return nn[0].cloud_url
