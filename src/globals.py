@@ -57,6 +57,7 @@ class GEOMETRY_NAME:
     POLYGON = sly.Polygon.geometry_name()
     BITMAP = sly.Bitmap.geometry_name()
     GRAPH_NODES = sly.GraphNodes.geometry_name()
+    ORIENTED_BBOX = sly.OrientedBBox.geometry_name()
     SMARTTOOL = "smarttool"
     DETECTOR = "detector"
 
@@ -233,6 +234,7 @@ geometry_nn = {
     GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2, NN.SAM3],
     GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2, NN.SAM3],
     GEOMETRY_NAME.DETECTOR: [NN.YOLOV8],
+    GEOMETRY_NAME.ORIENTED_BBOX: [NN.YOLOV8, NN.SAM3],  # TODO: Change to actual NN apps
 }
 
 
