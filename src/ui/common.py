@@ -79,6 +79,14 @@ GEOMETRIES = (
             },
         },
     ),
+    (
+        g.GEOMETRY_NAME.ORIENTED_BBOX,
+        {
+            "title": "Oriented Bounding Box",
+            "description": "Select NN model for Oriented Bounding Box figures",
+            "geometries": [g.GEOMETRY_NAME.ORIENTED_BBOX],
+        },
+    ),
 )
 EMPTY = Empty()
 DEPLOY_APPS_PARAMETERS = {nn.name: DeployAppParameters(nn) for nn in g.nns}
