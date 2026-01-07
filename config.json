@@ -3,8 +3,8 @@
   "version": "2.0.0",
   "name": "Auto Track",
   "description": "Tracking settings for video annotation tool",
-  "docker_image": "supervisely/auto-track:1.0.7",
-  "instance_version": "6.15.35",
+  "docker_image": "supervisely/auto-track:1.0.8",
+  "instance_version": "6.15.40",
   "categories": [
     "videos",
     "labeling",

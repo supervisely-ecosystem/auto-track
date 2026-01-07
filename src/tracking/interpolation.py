@@ -1,6 +1,7 @@
+import math
 from threading import Lock
 import time
-from typing import Dict, Generator, List, Tuple
+from typing import Dict, Generator, List, Tuple, Union
 import uuid
 
 import cv2
@@ -14,6 +15,7 @@ from supervisely.api.module_api import ApiField
 from supervisely.api.video.video_api import VideoInfo
 from supervisely import logger
 from supervisely.geometry.geometry import Geometry
+from supervisely.geometry.point_location import PointLocation, points_to_row_col_list
 
 import src.utils as utils
 
@@ -168,7 +170,15 @@ def unsupported_geometry_interpolator(this_geom: Geometry, **kwargs):
     raise NotImplementedError(msg)
 
 
-def _fix_unbound(box: sly.Rectangle, frame_hw: Tuple[int, int]) -> sly.Rectangle:
+def _fix_unbound(box: Union[sly.Rectangle, sly.OrientedBBox], frame_hw: Tuple[int, int]) -> sly.Rectangle:
+    if isinstance(box, sly.OrientedBBox):
+        return sly.OrientedBBox(
+            max(0, box.top),
+            max(0, box.left),
+            min(frame_hw[0], box.bottom),
+            min(frame_hw[1], box.right),
+            box.angle,
+        )
     return sly.Rectangle(
         max(0, box.top), max(0, box.left), min(frame_hw[0], box.bottom), min(frame_hw[1], box.right)
     )
@@ -272,6 +282,45 @@ def interpolate_point(
     logger.debug("Done interpolating point")
     return created_geometries
 
+def interpolate_oriented_bbox(
+    this_geom: sly.OrientedBBox,
+    dest_geom: sly.OrientedBBox,
+    frames_n: int,
+    video_info: VideoInfo,
+) -> List[sly.OrientedBBox]:
+    logger.debug("Interpolating oriented bbox")
+    rowdelta = (dest_geom.height - this_geom.height) / (frames_n + 1)
+    coldelta = (dest_geom.width - this_geom.width) / (frames_n + 1)
+    rowshift = (dest_geom.center.row - this_geom.center.row) / (frames_n + 1)
+    colshift = (dest_geom.center.col - this_geom.center.col) / (frames_n + 1)
+    start_angle = this_geom.angle % (2*math.pi)
+    end_angle = dest_geom.angle % (2*math.pi)
+    angle_diff = end_angle - start_angle
+    if angle_diff > math.pi:
+        angle_diff -= 2*math.pi
+    elif angle_diff < -math.pi:
+        angle_diff += 2*math.pi
+    angle_delta = angle_diff / (frames_n + 1)
+    created_geometries: List[sly.AnyGeometry] = []
+    for i in range(1, frames_n + 1):
+        resized: sly.OrientedBBox = this_geom.resize(
+            in_size=(video_info.frame_height, video_info.frame_width),
+            out_size=(
+                int(video_info.frame_height * (1 + rowdelta * i / this_geom.height)),
+                int(video_info.frame_width * (1 + coldelta * i / this_geom.width)),
+            ),
+        )
+        target = int(this_geom.center.row + i * rowshift), int(this_geom.center.col + i * colshift)
+        moved: sly.OrientedBBox = resized.translate(
+            target[0] - resized.center.row, target[1] - resized.center.col
+        )
+        moved = _fix_unbound(moved, (video_info.frame_height, video_info.frame_width))
+        this_angle = start_angle + i * angle_delta
+        rotated = sly.OrientedBBox(moved.top, moved.left, moved.bottom, moved.right, this_angle)
+        created_geometries.append(rotated)
+    logger.debug("Done interpolating oriented bbox")
+    return created_geometries
+
 
 INTERPOLATORS = {
     sly.Rectangle.name(): interpolate_box,
@@ -279,6 +328,7 @@ INTERPOLATORS = {
     sly.Polygon.name(): interpolate_polygon,
     sly.Polyline.name(): interpolate_line,
     sly.Point.name(): interpolate_point,
+    sly.OrientedBBox.name(): interpolate_oriented_bbox,
 }
 
 
