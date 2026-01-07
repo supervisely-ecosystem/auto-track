@@ -29,7 +29,8 @@
     "point",
     "polyline",
     "line",
-    "graph"
+    "graph",
+    "oriented_bbox"
   ],
   "community_agent": false,
   "is_auto_track": true,
