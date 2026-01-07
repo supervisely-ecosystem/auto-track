@@ -1,5 +1,5 @@
-# supervisely==6.73.45
-git+https://github.com/supervisely/supervisely.git@gpu-cloud
+supervisely==6.73.497
+# git+https://github.com/supervisely/supervisely.git@gpu-cloud
 lap
 cython_bbox
 scipy
