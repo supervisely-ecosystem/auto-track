@@ -1040,16 +1040,17 @@ class Track:
             for prediction, src_figure in zip(frame_predictions, figures):
                 if prediction is None:
                     result[-1].append(None)
-                result[-1].append(
-                    utils.figure_from_prediction(
-                        prediction=prediction,
-                        figure_id=None,  # figure is not uploaded yet
-                        object_id=src_figure.object_id,
-                        frame_index=frame_from + 1 + i,
-                        track_id=self.track_id,
-                        crop=(self.video_info.frame_height, self.video_info.frame_width),
+                else:
+                    result[-1].append(
+                        utils.figure_from_prediction(
+                            prediction=prediction,
+                            figure_id=None,  # figure is not uploaded yet
+                            object_id=src_figure.object_id,
+                            frame_index=frame_from + 1 + i,
+                            track_id=self.track_id,
+                            crop=(self.video_info.frame_height, self.video_info.frame_width),
+                        )
                     )
-                )
         return result
 
     def predict_batch(
