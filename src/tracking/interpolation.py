@@ -714,7 +714,6 @@ def interpolate_frames(api, context):
     with active_interpolations[track_id]:
         Interpolator(api, context).interpolate_frames()
 
-@utils.send_error_data
 def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figures: List[FigureInfo], frames_count: int) -> List[List[Union[Geometry, None]]]:
     MAX_PREVIOUS_FRAMES = 5
     dataset_id = video_info.dataset_id
