@@ -1004,10 +1004,8 @@ class Track:
                     frames_count=frames_count,
                 )
                 predictions = [
-                    [utils.Prediction(
-                        geometry_data=prediciton.to_json(),
-                        geometry_type=prediction.geometry_name(),
-                    ) if prediciton is not None else None for prediciton in frame_predictions]
+                    [utils.Prediction(geometry_data=prediction.to_json(), geometry_type=prediction.geometry_name(),
+                    ) if prediction is not None else None for prediction in frame_predictions]
                     for frame_predictions in predictions
                 ]
             else:
