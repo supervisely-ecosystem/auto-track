@@ -1030,6 +1030,11 @@ class Track:
             if "Task with id" in exc_str and "not found" in exc_str:
                 message = "Selected session is not available. Please select another session in the Auto Track app GUI."
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
+            logger.error(
+                "Error during tracking",
+                exc_info=True,
+                extra={**self.logger_extra, "geometry": geometry_type, "frames": [frame_from, frame_to]},
+            )
             return None
         result = []
         for i, frame_predictions in enumerate(predictions):
