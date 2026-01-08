@@ -98,6 +98,7 @@ class Tracklet:
         self.end_frame = end_frame
 
     def update(self, frame_index: int, figures: List[FigureInfo], stop=False):
+        figures = [figure for figure in figures if not figure is None]
         if stop:
             self.end_frame = frame_index - 1
             return
