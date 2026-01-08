@@ -165,6 +165,8 @@ def get_nn_settings():
             if selector_value == "url":
                 url = geometry_card.nn_url_input.get_value()
                 settings[geometry_name] = {"url": url}
+            elif selector_value == "interpolation":
+                settings[geometry_name] = {"interpolation": True}
             else:
                 session = app_selector.get_value()
                 settings[geometry_name] = {"task_id": session}

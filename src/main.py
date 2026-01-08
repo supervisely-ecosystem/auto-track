@@ -122,11 +122,14 @@ def available_geometries(request: Request):
         if "url" in settings:
             if settings["url"]:
                 available.append(geometry_name)
+        elif "interpolation" in settings:
+            if settings["interpolation"]:
+                available.append(geometry_name)
         else:
             if settings["task_id"]:
                 available.append(geometry_name)
     if all(
-        geom in available
+        geom in available and not nn_settings[geom].get("interpolation", False)
         for geom in [g.GEOMETRY_NAME.POINT, g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.SMARTTOOL]
     ):
         available.append("smarttool-track")

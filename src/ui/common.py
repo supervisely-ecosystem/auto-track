@@ -12,6 +12,7 @@ GEOMETRIES = (
             "title": "Bounding Box",
             "description": "Select NN model for Bounding box figures",
             "geometries": [g.GEOMETRY_NAME.RECTANGLE],
+            "interpolation_supported": True,
         },
     ),
     (
@@ -25,6 +26,7 @@ GEOMETRIES = (
                 g.GEOMETRY_NAME.POLYGON,
                 g.GEOMETRY_NAME.GRAPH_NODES,
             ],
+            "interpolation_supported": True,
         },
     ),
     (
@@ -33,6 +35,7 @@ GEOMETRIES = (
             "title": "Mask",
             "description": "Select NN model for Mask figures",
             "geometries": [sly.Bitmap.geometry_name()],
+            "interpolation_supported": False,
         },
     ),
     (
@@ -52,6 +55,7 @@ GEOMETRIES = (
                     "description": "This model is alows to annotate objects using SmartTool. To enable SmartTool objects tracking, Models for Bounding Box and Point based geometries should be selected as well.",
                 }
             },
+            "interpolation_supported": False,
         },
     ),
     (
@@ -77,6 +81,7 @@ GEOMETRIES = (
                     "step": 0.05,
                 },
             },
+            "interpolation_supported": False,
         },
     ),
     (
@@ -85,6 +90,7 @@ GEOMETRIES = (
             "title": "Oriented Bounding Box",
             "description": "Select NN model for Oriented Bounding Box figures",
             "geometries": [g.GEOMETRY_NAME.ORIENTED_BBOX],
+            "interpolation_supported": True,
         },
     ),
 )
@@ -101,6 +107,7 @@ GEOMETRY_CARDS = {
         deploy_app=DEPLOY_APP_BY_GEOMETRY[geometry_name],
         description=details["description"],
         extra_params=details.get("extra_params", {}),
+        intrepolation_supported=details.get("interpolation_supported", False)
     )
     for geometry_name, details in GEOMETRIES
 }

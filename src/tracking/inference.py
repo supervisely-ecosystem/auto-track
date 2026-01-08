@@ -470,3 +470,6 @@ def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, f
 
     elif "url" in nn_settings:
         return []
+    
+    else:
+        return []

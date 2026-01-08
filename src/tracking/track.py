@@ -16,6 +16,7 @@ from supervisely import logger
 import src.globals as g
 import src.utils as utils
 import src.tracking.inference as inference
+from src.tracking.interpolation import interpolate_next
 
 
 def validate_nn_settings_for_geometry(
@@ -36,6 +37,15 @@ def validate_nn_settings_for_geometry(
         if logger is not None:
             logger.warning(f"NN settings for {', '.join(invalid)} are not specified")
         return False, invalid
+    if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
+        rect_settings = nn_settings.get(g.GEOMETRY_NAME.RECTANGLE, {})
+        point_settings = nn_settings.get(g.GEOMETRY_NAME.POINT, {})
+        if rect_settings.get("interpolation", False) or point_settings.get("interpolation", False):
+            if raise_error:
+                raise ValueError("Interpolation is not supported for SmartTool tracking")
+            if logger is not None:
+                logger.warning("Interpolation is not supported for SmartTool tracking")
+            return False, ["smarttool"]
     return True, []
 
 
@@ -985,6 +995,21 @@ class Track:
                     geometries_data=[figure.geometry for figure in figures],
                     geometry_type=geometry_type,
                 )
+            elif "interpolation" in self.nn_settings[geometry_type]:
+                predictions = interpolate_next(
+                    api=self.api,
+                    video_info=self.video_info,
+                    frame_index=frame_from,
+                    figures=figures,
+                    frames_count=frames_count,
+                )
+                predictions = [
+                    [utils.Prediction(
+                        geometry_data=prediciton.to_json(),
+                        geometry_type=prediction.geometry_name(),
+                    ) if prediciton is not None else None for prediciton in frame_predictions]
+                    for frame_predictions in predictions
+                ]
             else:
                 task_id = self.nn_settings[geometry_type]["task_id"]
                 predictions = inference.predict_with_app(
@@ -1010,6 +1035,8 @@ class Track:
         for i, frame_predictions in enumerate(predictions):
             result.append([])
             for prediction, src_figure in zip(frame_predictions, figures):
+                if prediction is None:
+                    result[-1].append(None)
                 result[-1].append(
                     utils.figure_from_prediction(
                         prediction=prediction,

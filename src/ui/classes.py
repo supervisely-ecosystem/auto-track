@@ -222,12 +222,14 @@ class GeometryCard:
         deploy_app: DeployAppByGeometry,
         description="",
         extra_params={},
+        intrepolation_supported: bool = False,
     ):
         self.geometries = geometries
         self.title = title
         self.description = description
         self.deploy_app = deploy_app
         self.extra_params = extra_params
+        self.intrepolation_supported = intrepolation_supported
         self.inference_settings = None
         self.card = None
         self._nn_url_changed = time.monotonic()
@@ -272,9 +274,15 @@ class GeometryCard:
                 content=select_nn_app_container,
                 disabled=True,
             ),
+            Select.Item(
+                "interpolation",
+                "Interpolation (no model)",
+            )
         ]
         if not g.ENV.is_cloud():
             select_nn_items = select_nn_items[1:]
+        if not self.intrepolation_supported:
+            select_nn_items = select_nn_items[:-1]
         self.select_nn = Select(items=select_nn_items)
         select_nn_field = Field(self.select_nn, title="Select model for predictions")
         select_nn_one_of = OneOf(self.select_nn)
