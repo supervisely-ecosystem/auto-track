@@ -733,9 +733,7 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
             {
                 "field": "endFrame",
                 "operator": "<=",
-                "value": min(
-                    frame_index - 1
-                ),
+                "value": frame_index - 1,
             },
         ],
     )
