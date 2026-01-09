@@ -733,7 +733,7 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
             {
                 "field": "endFrame",
                 "operator": "<=",
-                "value": frame_index,
+                "value": max(0, frame_index-1),
             },
         ],
     )
@@ -752,16 +752,14 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
     for this_figure in figures:
         left_figure = previous_figures.get(this_figure.id, None)
         if left_figure is None:
-            logger.info(f"No previous figure found, skipping interpolation for figure {this_figure.id}", extra={"figure_id": this_figure.id})
-            figure_predictions.append(None)
+            logger.info(f"No previous figure found, cloining instead of interpolating for figure {this_figure.id}", extra={"figure_id": this_figure.id})
+            figure_predictions.append([this_geometry for _ in range(frames_count)])
+            continue
         this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
         left_geometry = sly.deserialize_geometry(left_figure.geometry_type, left_figure.geometry)
         frames_n = this_figure.frame_index - left_figure.frame_index
         if frames_n < 0:
             figure_predictions.append(None)
-            continue
-        if frames_n == 0:
-            figure_predictions.append([this_geometry for _ in range(frames_count)])
             continue
         interpolator_func = NEXT_INTERPOLATORS.get(
             this_geometry.name(), unsupported_geometry_interpolator
