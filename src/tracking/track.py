@@ -1317,7 +1317,7 @@ class Track:
             figure
             for timeline_predictions in predictions
             for frame_predictions in timeline_predictions
-            for figure in frame_predictions
+            for figure in frame_predictions if figure is not None
         ]
 
     def remove_predicted_figures_by_frame_range(
