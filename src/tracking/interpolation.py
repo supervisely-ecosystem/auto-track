@@ -756,8 +756,8 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
             figure_predictions.append(None)
         this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
         left_geometry = sly.deserialize_geometry(left_figure.geometry_type, left_figure.geometry)
-        frames_n = this_figure.frame_index - left_figure.frame_index - 1
-        if frames_n <= 0:
+        frames_n = this_figure.frame_index - left_figure.frame_index
+        if frames_n < 0:
             figure_predictions.append(None)
         interpolator_func = NEXT_INTERPOLATORS.get(
             this_geometry.name(), unsupported_geometry_interpolator
