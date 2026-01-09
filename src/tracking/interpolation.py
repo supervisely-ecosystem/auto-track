@@ -365,7 +365,7 @@ def interpolate_line_next(this_geom: sly.Polyline, prev_geom: sly.Polyline, fram
     for i in range(1, frames_count + 1):
         points = []
         for p1, p2 in zip(prev_geom.exterior, this_geom.exterior):
-            delta = ((p2.row - p1.row) / (frames_n + 1), (p2.col - p1.col) / (frames_n + 1))
+            delta = ((p2.row - p1.row) / frames_n, (p2.col - p1.col) / frames_n)
             x = int(p2.row + i * delta[0])
             y = int(p2.col + i * delta[1])
             points.append(sly.PointLocation(x, y))
@@ -376,7 +376,7 @@ def interpolate_line_next(this_geom: sly.Polyline, prev_geom: sly.Polyline, fram
 def interpolate_point_next(this_geom: sly.Point, prev_geom: sly.Point, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.Point]:
     logger.debug("Interpolating point")
     created_geometries: List[sly.Point] = []
-    delta = ((this_geom.row - prev_geom.row) / (frames_n + 1), (this_geom.col - prev_geom.col) / (frames_n + 1))
+    delta = ((this_geom.row - prev_geom.row) / frames_n, (this_geom.col - prev_geom.col) / frames_n)
     for i in range(1, frames_count + 1):
         x = int(this_geom.row + i * delta[0])
         y = int(this_geom.col + i * delta[1])
@@ -386,10 +386,10 @@ def interpolate_point_next(this_geom: sly.Point, prev_geom: sly.Point, frames_n:
 
 def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.OrientedBBox, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.OrientedBBox]:
     logger.debug("Interpolating oriented bbox")
-    rowdelta = (this_geom.height - prev_geom.height) / (frames_n + 1)
-    coldelta = (this_geom.width - prev_geom.width) / (frames_n + 1)
-    rowshift = (this_geom.center.row - prev_geom.center.row) / (frames_n + 1)
-    colshift = (this_geom.center.col - prev_geom.center.col) / (frames_n + 1)
+    rowdelta = (this_geom.height - prev_geom.height) / frames_n
+    coldelta = (this_geom.width - prev_geom.width) / frames_n
+    rowshift = (this_geom.center.row - prev_geom.center.row) / frames_n
+    colshift = (this_geom.center.col - prev_geom.center.col) / frames_n
     start_angle = prev_geom.angle % (2*math.pi)
     end_angle = this_geom.angle % (2*math.pi)
     angle_diff = end_angle - start_angle
@@ -397,7 +397,7 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
         angle_diff -= 2*math.pi
     elif angle_diff < -math.pi:
         angle_diff += 2*math.pi
-    angle_delta = angle_diff / (frames_n + 1)
+    angle_delta = angle_diff / frames_n
     created_geometries: List[sly.AnyGeometry] = []
     for i in range(1, frames_count + 1):
         resized: sly.OrientedBBox = this_geom.resize(
