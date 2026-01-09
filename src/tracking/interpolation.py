@@ -760,6 +760,9 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
         if frames_n < 0:
             figure_predictions.append(None)
             continue
+        if frames_n == 0:
+            figure_predictions.append([this_geometry for _ in range(frames_count)])
+            continue
         interpolator_func = NEXT_INTERPOLATORS.get(
             this_geometry.name(), unsupported_geometry_interpolator
         )
