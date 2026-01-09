@@ -508,9 +508,11 @@ class Timeline:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 for frame_index in range(frame_from + 1, frame_to + 1):
                     if len(predictions) == 0:
+                        tracklet.update(frame_index, [], stop=True)
                         return
                     figures = predictions.pop(0)
                     if figures is None:
+                        tracklet.update(frame_index, [], stop=True)
                         return
                     if len(figures) == 0:  # objects dissapear
                         tracklet.update(frame_index, figures, stop=True)
