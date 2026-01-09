@@ -334,10 +334,10 @@ INTERPOLATORS = {
 
 def interpolate_box_next(this_geom: sly.Rectangle, prev_geom: sly.Rectangle, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.Rectangle]:
     logger.debug("Interpolating box")
-    rowdelta = (this_geom.height - prev_geom.height) / (frames_n + 1)
-    coldelta = (this_geom.width - prev_geom.width) / (frames_n + 1)
-    rowshift = (this_geom.center.row - prev_geom.center.row) / (frames_n + 1)
-    colshift = (this_geom.center.col - prev_geom.center.col) / (frames_n + 1)
+    rowdelta = (this_geom.height - prev_geom.height) / frames_n
+    coldelta = (this_geom.width - prev_geom.width) / frames_n
+    rowshift = (this_geom.center.row - prev_geom.center.row) / frames_n
+    colshift = (this_geom.center.col - prev_geom.center.col) / frames_n
     created_geometries: List[sly.AnyGeometry] = []
     for i in range(1, frames_count+1):
         resized: sly.Rectangle = this_geom.resize(
