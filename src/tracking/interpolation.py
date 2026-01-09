@@ -745,7 +745,7 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
         object_id = this_figure.object_id
         left = None
         for figure in per_object_figures.get(object_id, []):
-            if figure.geometry_type == this_figure.geometry_type and figure.frame_index < this_figure.frame_index and (left is None or left.frame_index < figure.frame_index):
+            if figure.geometry_type == this_figure.geometry_type and figure.frame_index <= this_figure.frame_index and (left is None or left.frame_index < figure.frame_index):
                 left = figure
         previous_figures[this_figure.id] = left
     figure_predictions = []
