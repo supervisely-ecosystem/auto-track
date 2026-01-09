@@ -751,11 +751,11 @@ def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figu
     figure_predictions = []
     for this_figure in figures:
         left_figure = previous_figures.get(this_figure.id, None)
+        this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
         if left_figure is None:
             logger.info(f"No previous figure found, cloining instead of interpolating for figure {this_figure.id}", extra={"figure_id": this_figure.id})
             figure_predictions.append([this_geometry for _ in range(frames_count)])
             continue
-        this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
         left_geometry = sly.deserialize_geometry(left_figure.geometry_type, left_figure.geometry)
         frames_n = this_figure.frame_index - left_figure.frame_index
         if frames_n < 0:
