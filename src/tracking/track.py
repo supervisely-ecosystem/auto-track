@@ -511,6 +511,7 @@ class Timeline:
                         tracklet.update(frame_index, [], stop=True)
                         return
                     figures = predictions.pop(0)
+                    figures = [figure for figure in figures if figure is not None]
                     if figures is None:
                         tracklet.update(frame_index, [], stop=True)
                         return
