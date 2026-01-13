@@ -396,7 +396,7 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
             right=int(this_geom.right + i * coldelta / 2 + i * colshift),
         )
         new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
-        this_angle = (start_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
+        this_angle = (end_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
         rotated = sly.OrientedBBox(new.top, new.left, new.bottom, new.right, this_angle)
         created_geometries.append(rotated)
     logger.debug("Done interpolating oriented bbox")
