@@ -425,14 +425,24 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
     angle_delta = angle_diff / frames_n
     created_geometries: List[sly.AnyGeometry] = []
     for i in range(1, frames_count + 1):
+        top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
+        left=int(this_geom.left - i * coldelta / 2 + i * colshift),
+        bottom=int(this_geom.bottom + i * rowdelta / 2 + i * rowshift),
+        right=int(this_geom.right + i * coldelta / 2 + i * colshift),
+        this_angle = (end_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
+        if top > bottom or left > right:
+            top, bottom = min(top, bottom), max(top, bottom)
+            left, right = min(left, right), max(left, right)
+            this_angle += math.pi
+            this_angle = (this_angle + math.pi) % (2 * math.pi) - math.pi
+
         new = sly.Rectangle(
-            top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
-            left=int(this_geom.left - i * coldelta / 2 + i * colshift),
-            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * rowshift),
-            right=int(this_geom.right + i * coldelta / 2 + i * colshift),
+            top=top,
+            left=left,
+            bottom=bottom,
+            right=right
         )
         new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
-        this_angle = (end_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
         rotated = sly.OrientedBBox(new.top, new.left, new.bottom, new.right, this_angle)
         created_geometries.append(rotated)
     logger.debug("Done interpolating oriented bbox")
