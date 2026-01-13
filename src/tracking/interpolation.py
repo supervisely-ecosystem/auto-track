@@ -337,19 +337,14 @@ def interpolate_box_next(this_geom: sly.Rectangle, prev_geom: sly.Rectangle, fra
     colshift = (this_geom.center.col - prev_geom.center.col) / frames_n
     created_geometries: List[sly.AnyGeometry] = []
     for i in range(1, frames_count+1):
-        resized: sly.Rectangle = this_geom.resize(
-            in_size=(video_info.frame_height, video_info.frame_width),
-            out_size=(
-                int(video_info.frame_height * (1 + rowdelta * i / this_geom.height)),
-                int(video_info.frame_width * (1 + coldelta * i / this_geom.width)),
-            ),
+        new = sly.Rectangle(
+            top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
+            left=int(this_geom.left - i * coldelta / 2 + i * rowshift),
+            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * colshift),
+            right=int(this_geom.right + i * coldelta / 2 + i * colshift),
         )
-        target = int(this_geom.center.row + i * rowshift), int(this_geom.center.col + i * colshift)
-        moved: sly.Rectangle = resized.translate(
-            target[0] - resized.center.row, target[1] - resized.center.col
-        )
-        moved = _fix_unbound(moved, (video_info.frame_height, video_info.frame_width))
-        created_geometries.append(moved)
+        new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
+        created_geometries.append(new)
     logger.debug("Done interpolating box")
     return created_geometries
 
@@ -394,20 +389,15 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
     angle_delta = angle_diff / frames_n
     created_geometries: List[sly.AnyGeometry] = []
     for i in range(1, frames_count + 1):
-        resized: sly.OrientedBBox = this_geom.resize(
-            in_size=(video_info.frame_height, video_info.frame_width),
-            out_size=(
-                int(video_info.frame_height * (1 + rowdelta * i / this_geom.height)),
-                int(video_info.frame_width * (1 + coldelta * i / this_geom.width)),
-            ),
+        new = sly.Rectangle(
+            top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
+            left=int(this_geom.left - i * coldelta / 2 + i * rowshift),
+            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * colshift),
+            right=int(this_geom.right + i * coldelta / 2 + i * colshift),
         )
-        target = int(this_geom.center.row + i * rowshift), int(this_geom.center.col + i * colshift)
-        moved: sly.OrientedBBox = resized.translate(
-            target[0] - resized.center.row, target[1] - resized.center.col
-        )
-        moved = _fix_unbound(moved, (video_info.frame_height, video_info.frame_width))
+        new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
         this_angle = (start_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
-        rotated = sly.OrientedBBox(moved.top, moved.left, moved.bottom, moved.right, this_angle)
+        rotated = sly.OrientedBBox(new.top, new.left, new.bottom, new.right, this_angle)
         created_geometries.append(rotated)
     logger.debug("Done interpolating oriented bbox")
     return created_geometries
