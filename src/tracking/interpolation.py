@@ -339,8 +339,8 @@ def interpolate_box_next(this_geom: sly.Rectangle, prev_geom: sly.Rectangle, fra
     for i in range(1, frames_count+1):
         new = sly.Rectangle(
             top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
-            left=int(this_geom.left - i * coldelta / 2 + i * rowshift),
-            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * colshift),
+            left=int(this_geom.left - i * coldelta / 2 + i * colshift),
+            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * rowshift),
             right=int(this_geom.right + i * coldelta / 2 + i * colshift),
         )
         new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
@@ -391,8 +391,8 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
     for i in range(1, frames_count + 1):
         new = sly.Rectangle(
             top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
-            left=int(this_geom.left - i * coldelta / 2 + i * rowshift),
-            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * colshift),
+            left=int(this_geom.left - i * coldelta / 2 + i * colshift),
+            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * rowshift),
             right=int(this_geom.right + i * coldelta / 2 + i * colshift),
         )
         new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
