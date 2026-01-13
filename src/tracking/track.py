@@ -1472,6 +1472,8 @@ class Track:
         figures = self._filter_figures_to_upload(figures, timestamp)
         object_ids = list(set([fig.object_id for fig in figures]))
         if len(object_ids) == 0:
+            self.refresh_progress()
+            self.progress.notify()
             return
 
         figures_to_delete: List[FigureInfo] = self.api.video.figure.get_list(
