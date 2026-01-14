@@ -1678,7 +1678,7 @@ class Track:
                     "filter disappeared": f"{filter_disappeared_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
                     "update from detections": f"{update_from_detections_time:.6f} sec",
-                    "update timelines": f"{update_timelines_time:.6f} sec",
+                    # "update timelines": f"{update_timelines_time:.6f} sec",
                     "update progress": f"{update_progress_time:.6f} sec",
                     "other": f"{total_tm.get_sec() - sum([apply_updates_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
                     **self.logger_extra,
