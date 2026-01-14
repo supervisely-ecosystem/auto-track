@@ -436,7 +436,7 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
                 "angle": this_angle,
                 "deltas": [rowdelta, coldelta]
             })
-            created_geometries.extend([None]*frames_count+1-i)
+            created_geometries.extend([None]*(frames_count+1-i))
             break
         new = sly.Rectangle(
             top=top,
