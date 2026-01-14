@@ -1649,6 +1649,7 @@ class Track:
             # update_timelines_time, _ = utils.time_it(
             #     self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
             # )
+            update_timelines_time = 0
 
             # update from detections
             update_from_detections_time = 0
