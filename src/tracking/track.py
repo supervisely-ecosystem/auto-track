@@ -1492,23 +1492,30 @@ class Track:
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
-
-        self.refresh_progress()
-        self.progress.notify()
+    
+    def _upload_iteration_and_update_timelines(self, frame_range, timelines_indexes, predictions, transaction_id):
+            frame_from, frame_to = frame_range
+            self._upload_iteration(predictions, frame_range, transaction_id)
+            self.update_timelines(
+                frame_from, frame_to, timelines_indexes, predictions
+            )
+            self.refresh_progress()
+            self.progress.notify()
 
     def _upload_loop(self):
         while not self._upload_queue.empty():
-            predictions, frame_range, transaction_id = self._upload_queue.get()
-            self._upload_iteration(predictions, frame_range, transaction_id)
+            predictions, frame_range, timelines_indexes, transaction_id = self._upload_queue.get()
+            self._upload_iteration_and_update_timelines(frame_range, timelines_indexes, predictions, transaction_id)
 
-    def upload_predictions(
+    def upload_predictions_and_update_timelines(
         self,
         predictions: List[List[List[FigureInfo]]],
         frame_range: Tuple[int, int],
+        timelines_indexes,
         transaction_id: str = None,
     ):
         """Put predictions to upload queue and start upload thread if needed"""
-        self._upload_queue.put((predictions, frame_range, transaction_id))
+        self._upload_queue.put((predictions, frame_range, timelines_indexes, transaction_id))
         if self._upload_thread is None or not self._upload_thread.is_alive():
             self._upload_thread = threading.Thread(target=self._upload_loop)
             self._upload_thread.start()
@@ -1631,16 +1638,17 @@ class Track:
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
-                self.upload_predictions,
-                batch_predictions,
+                self._upload_iteration_and_update_timelines,
                 frame_range=(frame_from + 1, frame_to),
+                timelines_indexes=timelines_indexes,
+                predictions=batch_predictions,
                 transaction_id=transaction_id,
             )
 
             # Update timelines
-            update_timelines_time, _ = utils.time_it(
-                self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
-            )
+            # update_timelines_time, _ = utils.time_it(
+            #     self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
+            # )
 
             # update from detections
             update_from_detections_time = 0
