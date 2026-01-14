@@ -24,7 +24,7 @@ def cache_geometry(api: sly.Api, nn_settings: Dict, geometry: str, state: Dict):
         r.raise_for_status()
         sly.logger.debug("Cache video response", extra={"response": r.json(), "geometry": geometry})
 
-    else:
+    elif "task_id" in nn_settings[geometry]:
         task_id = nn_settings[geometry]["task_id"]
         if task_id is None or task_id == "":
             sly.logger.debug(

@@ -16,6 +16,7 @@ from supervisely import logger
 import src.globals as g
 import src.utils as utils
 import src.tracking.inference as inference
+from src.tracking.interpolation import interpolate_next
 
 
 def validate_nn_settings_for_geometry(
@@ -36,6 +37,15 @@ def validate_nn_settings_for_geometry(
         if logger is not None:
             logger.warning(f"NN settings for {', '.join(invalid)} are not specified")
         return False, invalid
+    if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
+        rect_settings = nn_settings.get(g.GEOMETRY_NAME.RECTANGLE, {})
+        point_settings = nn_settings.get(g.GEOMETRY_NAME.POINT, {})
+        if rect_settings.get("interpolation", False) or point_settings.get("interpolation", False):
+            if raise_error:
+                raise ValueError("Interpolation is not supported for SmartTool tracking")
+            if logger is not None:
+                logger.warning("Interpolation is not supported for SmartTool tracking")
+            return False, ["smarttool"]
     return True, []
 
 
@@ -88,6 +98,7 @@ class Tracklet:
         self.end_frame = end_frame
 
     def update(self, frame_index: int, figures: List[FigureInfo], stop=False):
+        figures = [figure for figure in figures if not figure is None]
         if stop:
             self.end_frame = frame_index - 1
             return
@@ -496,7 +507,14 @@ class Timeline:
         for tracklet in self.tracklets:
             if tracklet.start_frame <= frame_from <= tracklet.end_frame:
                 for frame_index in range(frame_from + 1, frame_to + 1):
+                    if len(predictions) == 0:
+                        tracklet.update(frame_index, [], stop=True)
+                        return
                     figures = predictions.pop(0)
+                    figures = [figure for figure in figures if figure is not None]
+                    if figures is None:
+                        tracklet.update(frame_index, [], stop=True)
+                        return
                     if len(figures) == 0:  # objects dissapear
                         tracklet.update(frame_index, figures, stop=True)
                         return
@@ -985,6 +1003,19 @@ class Track:
                     geometries_data=[figure.geometry for figure in figures],
                     geometry_type=geometry_type,
                 )
+            elif "interpolation" in self.nn_settings[geometry_type]:
+                predictions = interpolate_next(
+                    api=self.api,
+                    video_info=self.video_info,
+                    frame_index=frame_from,
+                    figures=figures,
+                    frames_count=frames_count,
+                )
+                predictions = [
+                    [utils.Prediction(geometry_data=prediction.to_json(), geometry_type=prediction.geometry_name(),
+                    ) if prediction is not None else None for prediction in frame_predictions]
+                    for frame_predictions in predictions
+                ]
             else:
                 task_id = self.nn_settings[geometry_type]["task_id"]
                 predictions = inference.predict_with_app(
@@ -1005,21 +1036,29 @@ class Track:
             if "Task with id" in exc_str and "not found" in exc_str:
                 message = "Selected session is not available. Please select another session in the Auto Track app GUI."
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
+            logger.error(
+                "Error during tracking",
+                exc_info=True,
+                extra={**self.logger_extra, "geometry": geometry_type, "frames": [frame_from, frame_to]},
+            )
             return None
         result = []
         for i, frame_predictions in enumerate(predictions):
             result.append([])
             for prediction, src_figure in zip(frame_predictions, figures):
-                result[-1].append(
-                    utils.figure_from_prediction(
-                        prediction=prediction,
-                        figure_id=None,  # figure is not uploaded yet
-                        object_id=src_figure.object_id,
-                        frame_index=frame_from + 1 + i,
-                        track_id=self.track_id,
-                        crop=(self.video_info.frame_height, self.video_info.frame_width),
+                if prediction is None:
+                    result[-1].append(None)
+                else:
+                    result[-1].append(
+                        utils.figure_from_prediction(
+                            prediction=prediction,
+                            figure_id=None,  # figure is not uploaded yet
+                            object_id=src_figure.object_id,
+                            frame_index=frame_from + 1 + i,
+                            track_id=self.track_id,
+                            crop=(self.video_info.frame_height, self.video_info.frame_width),
+                        )
                     )
-                )
         return result
 
     def predict_batch(
@@ -1281,7 +1320,7 @@ class Track:
             figure
             for timeline_predictions in predictions
             for frame_predictions in timeline_predictions
-            for figure in frame_predictions
+            for figure in frame_predictions if figure is not None
         ]
 
     def remove_predicted_figures_by_frame_range(
@@ -1433,6 +1472,8 @@ class Track:
         figures = self._filter_figures_to_upload(figures, timestamp)
         object_ids = list(set([fig.object_id for fig in figures]))
         if len(object_ids) == 0:
+            self.refresh_progress()
+            self.progress.notify()
             return
 
         figures_to_delete: List[FigureInfo] = self.api.video.figure.get_list(
@@ -1451,23 +1492,30 @@ class Track:
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
-
-        self.refresh_progress()
-        self.progress.notify()
+    
+    def _upload_iteration_and_update_timelines(self, frame_from, frame_to, timelines_indexes, predictions, transaction_id):
+            frame_range = (frame_from + 1, frame_to)
+            self._upload_iteration(predictions, frame_range, transaction_id)
+            self.update_timelines(
+                frame_from, frame_to, timelines_indexes, predictions
+            )
+            self.refresh_progress()
+            self.progress.notify()
 
     def _upload_loop(self):
         while not self._upload_queue.empty():
-            predictions, frame_range, transaction_id = self._upload_queue.get()
-            self._upload_iteration(predictions, frame_range, transaction_id)
+            predictions, frame_range, timelines_indexes, transaction_id = self._upload_queue.get()
+            self._upload_iteration_and_update_timelines(frame_range, timelines_indexes, predictions, transaction_id)
 
-    def upload_predictions(
+    def upload_predictions_and_update_timelines(
         self,
         predictions: List[List[List[FigureInfo]]],
         frame_range: Tuple[int, int],
+        timelines_indexes,
         transaction_id: str = None,
     ):
         """Put predictions to upload queue and start upload thread if needed"""
-        self._upload_queue.put((predictions, frame_range, transaction_id))
+        self._upload_queue.put((predictions, frame_range, timelines_indexes, transaction_id))
         if self._upload_thread is None or not self._upload_thread.is_alive():
             self._upload_thread = threading.Thread(target=self._upload_loop)
             self._upload_thread.start()
@@ -1590,16 +1638,19 @@ class Track:
 
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
-                self.upload_predictions,
-                batch_predictions,
-                frame_range=(frame_from + 1, frame_to),
+                self._upload_iteration_and_update_timelines,
+                frame_from=frame_from,
+                frame_to=frame_to,
+                timelines_indexes=timelines_indexes,
+                predictions=batch_predictions,
                 transaction_id=transaction_id,
             )
 
             # Update timelines
-            update_timelines_time, _ = utils.time_it(
-                self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
-            )
+            # update_timelines_time, _ = utils.time_it(
+            #     self.update_timelines, frame_from, frame_to, timelines_indexes, batch_predictions
+            # )
+            update_timelines_time = 0
 
             # update from detections
             update_from_detections_time = 0
@@ -1629,7 +1680,7 @@ class Track:
                     "filter disappeared": f"{filter_disappeared_time:.6f} sec",
                     "upload predictions": f"{upload_time:.6f} sec",
                     "update from detections": f"{update_from_detections_time:.6f} sec",
-                    "update timelines": f"{update_timelines_time:.6f} sec",
+                    # "update timelines": f"{update_timelines_time:.6f} sec",
                     "update progress": f"{update_progress_time:.6f} sec",
                     "other": f"{total_tm.get_sec() - sum([apply_updates_time, initial_detection_time, wait_update_time, batch_prediction_time, filter_disappeared_time, upload_time, update_from_detections_time, update_timelines_time, update_progress_time]):.6f} sec",
                     **self.logger_extra,

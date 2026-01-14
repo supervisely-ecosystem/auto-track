@@ -289,17 +289,16 @@ def interpolate_oriented_bbox(
     video_info: VideoInfo,
 ) -> List[sly.OrientedBBox]:
     logger.debug("Interpolating oriented bbox")
+    this_geom = normalize_oriented_bbox(this_geom)
+    dest_geom = normalize_oriented_bbox(dest_geom)
     rowdelta = (dest_geom.height - this_geom.height) / (frames_n + 1)
     coldelta = (dest_geom.width - this_geom.width) / (frames_n + 1)
     rowshift = (dest_geom.center.row - this_geom.center.row) / (frames_n + 1)
     colshift = (dest_geom.center.col - this_geom.center.col) / (frames_n + 1)
-    start_angle = this_geom.angle % (2*math.pi)
-    end_angle = dest_geom.angle % (2*math.pi)
+    start_angle = this_geom.angle
+    end_angle = dest_geom.angle
     angle_diff = end_angle - start_angle
-    if angle_diff > math.pi:
-        angle_diff -= 2*math.pi
-    elif angle_diff < -math.pi:
-        angle_diff += 2*math.pi
+    angle_diff = (angle_diff + math.pi) % (2*math.pi) - math.pi
     angle_delta = angle_diff / (frames_n + 1)
     created_geometries: List[sly.AnyGeometry] = []
     for i in range(1, frames_n + 1):
@@ -315,7 +314,7 @@ def interpolate_oriented_bbox(
             target[0] - resized.center.row, target[1] - resized.center.col
         )
         moved = _fix_unbound(moved, (video_info.frame_height, video_info.frame_width))
-        this_angle = start_angle + i * angle_delta
+        this_angle = (start_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
         rotated = sly.OrientedBBox(moved.top, moved.left, moved.bottom, moved.right, this_angle)
         created_geometries.append(rotated)
     logger.debug("Done interpolating oriented bbox")
@@ -329,6 +328,112 @@ INTERPOLATORS = {
     sly.Polyline.name(): interpolate_line,
     sly.Point.name(): interpolate_point,
     sly.OrientedBBox.name(): interpolate_oriented_bbox,
+}
+
+
+def interpolate_box_next(this_geom: sly.Rectangle, prev_geom: sly.Rectangle, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.Rectangle]:
+    logger.debug("Interpolating box")
+    rowdelta = (this_geom.height - prev_geom.height) / frames_n
+    coldelta = (this_geom.width - prev_geom.width) / frames_n
+    rowshift = (this_geom.center.row - prev_geom.center.row) / frames_n
+    colshift = (this_geom.center.col - prev_geom.center.col) / frames_n
+    created_geometries: List[sly.AnyGeometry] = []
+    for i in range(1, frames_count+1):
+        new = sly.Rectangle(
+            top=int(this_geom.top - i * rowdelta / 2 + i * rowshift),
+            left=int(this_geom.left - i * coldelta / 2 + i * colshift),
+            bottom=int(this_geom.bottom + i * rowdelta / 2 + i * rowshift),
+            right=int(this_geom.right + i * coldelta / 2 + i * colshift),
+        )
+        new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
+        created_geometries.append(new)
+    logger.debug("Done interpolating box")
+    return created_geometries
+
+
+def interpolate_line_next(this_geom: sly.Polyline, prev_geom: sly.Polyline, frames_n: int, video_info: VideoInfo, frames_count: int) -> sly.Polyline:
+    logger.debug("Interpolating line")
+    created_geometries: List[sly.Polyline] = []
+    if len(this_geom.exterior) != len(prev_geom.exterior):
+        raise ValueError("Cannot interpolate lines with different number of points")
+    for i in range(1, frames_count + 1):
+        points = []
+        for p1, p2 in zip(prev_geom.exterior, this_geom.exterior):
+            delta = ((p2.row - p1.row) / frames_n, (p2.col - p1.col) / frames_n)
+            x = int(p2.row + i * delta[0])
+            y = int(p2.col + i * delta[1])
+            points.append(sly.PointLocation(x, y))
+        created_geometries.append(sly.Polyline(exterior=points))
+    logger.debug("Done interpolating line")
+    return created_geometries
+
+def interpolate_point_next(this_geom: sly.Point, prev_geom: sly.Point, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.Point]:
+    logger.debug("Interpolating point")
+    created_geometries: List[sly.Point] = []
+    delta = ((this_geom.row - prev_geom.row) / frames_n, (this_geom.col - prev_geom.col) / frames_n)
+    for i in range(1, frames_count + 1):
+        x = int(this_geom.row + i * delta[0])
+        y = int(this_geom.col + i * delta[1])
+        created_geometries.append(sly.Point(row=x, col=y))
+    logger.debug("Done interpolating point")
+    return created_geometries
+
+def normalize_oriented_bbox(geom: sly.OrientedBBox):
+    angle = geom.angle
+    angle = (angle + math.pi) % (2 * math.pi) - math.pi
+    top, left, bottom, right = geom.top, geom.left, geom.bottom, geom.right
+
+    if angle >= math.pi / 2:
+        angle -= math.pi
+    elif angle < -math.pi / 2:
+        angle += math.pi
+    
+    return sly.OrientedBBox(top, left, bottom, right, angle)
+def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.OrientedBBox, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.OrientedBBox]:
+    logger.debug("Interpolating oriented bbox")
+    this_geom = normalize_oriented_bbox(this_geom)
+    prev_geom = normalize_oriented_bbox(prev_geom)
+    rowdelta = (this_geom.height - prev_geom.height) / frames_n
+    coldelta = (this_geom.width - prev_geom.width) / frames_n
+    rowshift = (this_geom.center.row - prev_geom.center.row) / frames_n
+    colshift = (this_geom.center.col - prev_geom.center.col) / frames_n
+    start_angle = prev_geom.angle
+    end_angle = this_geom.angle
+    angle_diff = end_angle - start_angle
+    angle_diff = (angle_diff + math.pi) % (2*math.pi) - math.pi
+    angle_delta = angle_diff / frames_n
+    created_geometries: List[sly.AnyGeometry] = []
+    for i in range(1, frames_count + 1):
+        top=int(this_geom.top - i * rowdelta / 2 + i * rowshift)
+        left=int(this_geom.left - i * coldelta / 2 + i * colshift)
+        bottom=int(this_geom.bottom + i * rowdelta / 2 + i * rowshift)
+        right=int(this_geom.right + i * coldelta / 2 + i * colshift)
+        this_angle = (end_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
+        if top > bottom or left > right:
+            logger.debug("The box has shrinked to zero", extra={
+                "tlbr": [top, left, bottom, right],
+                "angle": this_angle,
+                "deltas": [rowdelta, coldelta]
+            })
+            created_geometries.extend([None]*(frames_count+1-i))
+            break
+        new = sly.Rectangle(
+            top=top,
+            left=left,
+            bottom=bottom,
+            right=right
+        )
+        new = _fix_unbound(new, (video_info.frame_height, video_info.frame_width))
+        rotated = sly.OrientedBBox(new.top, new.left, new.bottom, new.right, this_angle)
+        created_geometries.append(rotated)
+    logger.debug("Done interpolating oriented bbox")
+    return created_geometries
+
+NEXT_INTERPOLATORS = {
+    sly.Rectangle.name(): interpolate_box_next,
+    sly.Polyline.name(): interpolate_line_next,
+    sly.Point.name(): interpolate_point_next,
+    sly.OrientedBBox.name(): interpolate_oriented_bbox_next,
 }
 
 
@@ -619,3 +724,74 @@ def interpolate_frames(api, context):
         )
     with active_interpolations[track_id]:
         Interpolator(api, context).interpolate_frames()
+
+def interpolate_next(api: sly.Api, video_info: VideoInfo, frame_index: int, figures: List[FigureInfo], frames_count: int) -> List[List[Union[Geometry, None]]]:
+    MAX_PREVIOUS_FRAMES = 5
+    dataset_id = video_info.dataset_id
+    all_figures: List[FigureInfo] = api.video.figure.get_list(
+        dataset_id=dataset_id,
+        filters=[
+            {
+                "field": "objectId",
+                "operator": "in",
+                "value": list(set([figure.object_id for figure in figures])),
+            },
+            {
+                "field": "startFrame",
+                "operator": ">=",
+                "value": max(0, frame_index - MAX_PREVIOUS_FRAMES),
+            },
+            {
+                "field": "endFrame",
+                "operator": "<=",
+                "value": max(0, frame_index-1),
+            },
+        ],
+    )
+    per_object_figures: Dict[int, List[FigureInfo]] = {}
+    for figure in all_figures:
+        per_object_figures.setdefault(figure.object_id, []).append(figure)
+    previous_figures: Dict[int, FigureInfo] = {}
+    for this_figure in figures:
+        object_id = this_figure.object_id
+        left = None
+        for figure in per_object_figures.get(object_id, []):
+            if figure.geometry_type == this_figure.geometry_type and figure.frame_index <= this_figure.frame_index and (left is None or left.frame_index < figure.frame_index):
+                left = figure
+        previous_figures[this_figure.id] = left
+    figure_predictions = []
+    for this_figure in figures:
+        left_figure = previous_figures.get(this_figure.id, None)
+        this_geometry = sly.deserialize_geometry(this_figure.geometry_type, this_figure.geometry)
+        if left_figure is None:
+            logger.info(f"No previous figure found, cloining instead of interpolating for figure {this_figure.id}", extra={"figure_id": this_figure.id})
+            figure_predictions.append([this_geometry for _ in range(frames_count)])
+            continue
+        left_geometry = sly.deserialize_geometry(left_figure.geometry_type, left_figure.geometry)
+        frames_n = this_figure.frame_index - left_figure.frame_index
+        if frames_n < 0:
+            logger.debug(f"previous figure is after the target during interpolation")
+            figure_predictions.append(None)
+            continue
+        if frames_n == 0:
+            logger.debug("No previous figure found for interpolation, cloning instead")
+            figure_predictions.append([this_geometry for _ in range(frames_count)])
+            continue
+        interpolator_func = NEXT_INTERPOLATORS.get(
+            this_geometry.name(), unsupported_geometry_interpolator
+        )
+        try:
+            figure_predictions.append(interpolator_func(this_geometry, left_geometry, frames_n, video_info, frames_count))
+        except:
+            logger.error("Error during interpolation", exc_info=True)
+            figure_predictions.append(None)
+    frames_predictions = [[] for _ in range(frames_count)]
+    for fig_pred in figure_predictions:
+        for frame_offset in range(frames_count):
+            if fig_pred is None:
+                frames_predictions[frame_offset].append(None)
+            else:
+                frames_predictions[frame_offset].append(fig_pred[frame_offset])
+    return frames_predictions
+        
+
