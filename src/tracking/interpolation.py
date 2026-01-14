@@ -431,8 +431,13 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
         right=int(this_geom.right + i * coldelta / 2 + i * colshift)
         this_angle = (end_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
         if top > bottom or left > right:
-            created_geometries.append(None)
-            continue
+            logger.debug("The box has shrinked to zero", extra={
+                "tlbr": [top, left, bottom, right],
+                "angle": this_angle,
+                "deltas": [rowdelta, coldelta]
+            })
+            created_geometries.extend([None]*frames_count+1-i)
+            break
         new = sly.Rectangle(
             top=top,
             left=left,
