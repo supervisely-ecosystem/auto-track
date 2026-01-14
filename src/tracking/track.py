@@ -1493,8 +1493,8 @@ class Track:
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
     
-    def _upload_iteration_and_update_timelines(self, frame_range, timelines_indexes, predictions, transaction_id):
-            frame_from, frame_to = frame_range
+    def _upload_iteration_and_update_timelines(self, frame_from, frame_to, timelines_indexes, predictions, transaction_id):
+            frame_range = (frame_from + 1, frame_to)
             self._upload_iteration(predictions, frame_range, transaction_id)
             self.update_timelines(
                 frame_from, frame_to, timelines_indexes, predictions
@@ -1639,7 +1639,8 @@ class Track:
             # upload and withdraw billing in parallel
             upload_time, _ = utils.time_it(
                 self._upload_iteration_and_update_timelines,
-                frame_range=(frame_from + 1, frame_to),
+                frame_from=frame_from,
+                frame_to=frame_to,
                 timelines_indexes=timelines_indexes,
                 predictions=batch_predictions,
                 transaction_id=transaction_id,
