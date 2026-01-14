@@ -383,33 +383,12 @@ def normalize_oriented_bbox(geom: sly.OrientedBBox):
     angle = (angle + math.pi) % (2 * math.pi) - math.pi
     top, left, bottom, right = geom.top, geom.left, geom.bottom, geom.right
 
-    if math.pi / 4 <= angle < 3 * math.pi / 4:
-        center_row = (top + bottom) / 2
-        center_col = (left + right) / 2
-        width = bottom - top
-        height = right - left
-        top = int(center_row - height / 2)
-        bottom = int(center_row + height / 2)
-        left = int(center_col - width / 2)
-        right = int(center_col + width / 2)
-        angle -= math.pi / 2
-    
-    elif angle >= 3 * math.pi / 4 or angle < -3 * math.pi / 4:
-        angle = angle - math.pi if angle >= 3 * math.pi / 4 else angle + math.pi
-    
-    elif -3 * math.pi / 4 <= angle < -math.pi / 4:
-        center_row = (top + bottom) / 2
-        center_col = (left + right) / 2
-        width = bottom - top
-        height = right - left
-        top = int(center_row - height / 2)
-        bottom = int(center_row + height / 2)
-        left = int(center_col - width / 2)
-        right = int(center_col + width / 2)
-        angle += math.pi / 2
+    if angle >= math.pi / 2:
+        angle -= math.pi
+    elif angle < -math.pi / 2:
+        angle += math.pi
     
     return sly.OrientedBBox(top, left, bottom, right, angle)
-
 def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.OrientedBBox, frames_n: int, video_info: VideoInfo, frames_count: int) -> List[sly.OrientedBBox]:
     logger.debug("Interpolating oriented bbox")
     this_geom = normalize_oriented_bbox(this_geom)
