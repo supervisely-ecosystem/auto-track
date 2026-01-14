@@ -431,11 +431,8 @@ def interpolate_oriented_bbox_next(this_geom: sly.OrientedBBox, prev_geom: sly.O
         right=int(this_geom.right + i * coldelta / 2 + i * colshift)
         this_angle = (end_angle + i * angle_delta + math.pi) % (2*math.pi) - math.pi
         if top > bottom or left > right:
-            top, bottom = min(top, bottom), max(top, bottom)
-            left, right = min(left, right), max(left, right)
-            this_angle += math.pi
-            this_angle = (this_angle + math.pi) % (2 * math.pi) - math.pi
-
+            created_geometries.append(None)
+            continue
         new = sly.Rectangle(
             top=top,
             left=left,
