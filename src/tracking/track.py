@@ -319,9 +319,10 @@ class Timeline:
 
     def update_object_info(self, object_info=None):
         if object_info is None:
-            object_info = self.track.api.video.object.get_list(self.track.dataset_id, filters=[{"field": "id", "operator": "=", "value": self.object_id}])[0]
-        if object_info is None:
-            raise ValueError(f"Object with id {self.object_id} not found")
+            object_infos = self.track.api.video.object.get_list(self.track.dataset_id, filters=[{"field": "id", "operator": "=", "value": self.object_id}])
+            if not object_infos:
+                raise ValueError(f"Object with id {self.object_id} not found")
+            object_info = object_infos[0]
         self.object_info = object_info
 
     def update_no_object_frames(self):
