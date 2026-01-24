@@ -22,6 +22,8 @@ from src.tracking.interpolation import interpolate_next
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
 ) -> Tuple[bool, List[str]]:
+    if logger is not None:
+        logger.debug("validating nn settings for geomtry: %s", geometry_name, extra={"nn_settings": nn_settings})
     geoms_to_validate = [geometry_name]
     if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
         geoms_to_validate.extend([g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT])
