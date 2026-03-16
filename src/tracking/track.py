@@ -196,7 +196,7 @@ class Timeline:
                     {"field": "objectId", "operator": "=", "value": self.object_id},
                     {"field": "startFrame", "operator": ">=", "value": start_frame},
                     {"field": "endFrame", "operator": "<=", "value": end_frame},
-                    {"field": "entityId", "operator": "=", "value": self.track.video_id}
+                    {"field": "entityId", "operator": "=", "value": self.track.video_id},
                 ],
             )
         figures = [fig for fig in figures if fig.entity_id == self.track.video_id]
@@ -319,7 +319,10 @@ class Timeline:
 
     def update_object_info(self, object_info=None):
         if object_info is None:
-            object_infos = self.track.api.video.object.get_list(self.track.dataset_id, filters=[{"field": "id", "operator": "=", "value": self.object_id}])
+            object_infos = self.track.api.video.object.get_list(
+                self.track.dataset_id,
+                filters=[{"field": "id", "operator": "=", "value": self.object_id}],
+            )
             if not object_infos:
                 raise ValueError(f"Object with id {self.object_id} not found")
             object_info = object_infos[0]
@@ -330,7 +333,10 @@ class Timeline:
             self.update_object_info()
         no_object_frames = set()
         for tag in self.object_info.tags:
-            if tag["tagId"] in self.track.no_object_tag_ids and tag["entityId"] == self.track.video_id:
+            if (
+                tag["tagId"] in self.track.no_object_tag_ids
+                and tag["entityId"] == self.track.video_id
+            ):
                 range_from, range_to = tag["frameRange"]
                 for i in range(range_from, range_to + 1):
                     no_object_frames.add(i)
@@ -355,7 +361,7 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
-                {"field": "entityId", "operator": "=", "value": self.track.video_id}
+                {"field": "entityId", "operator": "=", "value": self.track.video_id},
             ],
         )
         key_frame_figures = {
@@ -404,7 +410,7 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index + frames_count},
-                {"field": "entityId", "operator": "=", "value": self.track.video_id}
+                {"field": "entityId", "operator": "=", "value": self.track.video_id},
             ],
         )
         key_frame_figures = find_key_figures(figures)
@@ -451,7 +457,7 @@ class Timeline:
                                 {"field": "objectId", "operator": "=", "value": self.object_id},
                                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                                 {"field": "endFrame", "operator": "<=", "value": frame_index},
-                                {"field": "entityId", "operator": "=", "value": self.track.video_id}
+                                {"field": "entityId", "operator": "=", "value": self.track.video_id},
                             ],
                         )
                     tracklet.last_tracked = (frame_index, frame_figures)
@@ -463,7 +469,7 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
-                {"field": "entityId", "operator": "=", "value": self.video_id}
+                {"field": "entityId", "operator": "=", "value": self.video_id},
             ],
         )
         key_frame_figures = find_key_figures(frame_figures)
@@ -873,7 +879,9 @@ class Track:
         elif update.type == Update.Type.CONTINUE:
             self.continue_track(update.frame_index, update.frames_count)
         elif update.type == Update.Type.DELETE:
-            self.object_removed(update.object_ids[0], update.frame_index, update.frames_count)
+            # removal is done on the web
+            sly.logger.debug("Skipped object_removed update", extra={"update": update})  
+            # self.object_removed(update.object_ids[0], update.frame_index, update.frames_count)
         elif update.type == Update.Type.REMOVE_TAG:
             self.no_object_tag_removed(update.object_ids[0], update.frame_index)
         elif update.type == Update.Type.MANUAL_OBJECTS_REMOVED:
@@ -1013,8 +1021,17 @@ class Track:
                     frames_count=frames_count,
                 )
                 predictions = [
-                    [utils.Prediction(geometry_data=prediction.to_json(), geometry_type=prediction.geometry_name(),
-                    ) if prediction is not None else None for prediction in frame_predictions]
+                    [
+                        (
+                            utils.Prediction(
+                                geometry_data=prediction.to_json(),
+                                geometry_type=prediction.geometry_name(),
+                            )
+                            if prediction is not None
+                            else None
+                        )
+                        for prediction in frame_predictions
+                    ]
                     for frame_predictions in predictions
                 ]
             else:
@@ -1040,7 +1057,11 @@ class Track:
             logger.error(
                 "Error during tracking",
                 exc_info=True,
-                extra={**self.logger_extra, "geometry": geometry_type, "frames": [frame_from, frame_to]},
+                extra={
+                    **self.logger_extra,
+                    "geometry": geometry_type,
+                    "frames": [frame_from, frame_to],
+                },
             )
             return None
         result = []
@@ -1321,7 +1342,8 @@ class Track:
             figure
             for timeline_predictions in predictions
             for frame_predictions in timeline_predictions
-            for figure in frame_predictions if figure is not None
+            for figure in frame_predictions
+            if figure is not None
         ]
 
     def remove_predicted_figures_by_frame_range(
@@ -1333,7 +1355,7 @@ class Track:
                 {"field": "objectId", "operator": "in", "value": object_ids},
                 {"field": "startFrame", "operator": ">=", "value": frame_range[0]},
                 {"field": "endFrame", "operator": "<=", "value": frame_range[1]},
-                {"field": "entityId", "operator": "=", "value": self.video_id}
+                {"field": "entityId", "operator": "=", "value": self.video_id},
             ],
         )
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
@@ -1344,7 +1366,11 @@ class Track:
     def _remove_figures(self, figures: List[FigureInfo]):
         existing = self.api.video.figure.get_by_ids(self.dataset_id, [fig.id for fig in figures])
         existing = [fig for fig in existing if fig is not None and fig.entity_id == self.video_id]
-        logger.debug("Removing %s figures", len(existing), extra={**self.logger_extra, "figures": [fig.id for fig in existing]})
+        logger.debug(
+            "Removing %s figures",
+            len(existing),
+            extra={**self.logger_extra, "figures": [fig.id for fig in existing]},
+        )
         try:
             self.api.video.figure.remove_batch([fig.id for fig in existing])
             return
@@ -1483,7 +1509,7 @@ class Track:
                 {"field": "objectId", "operator": "in", "value": object_ids},
                 {"field": "startFrame", "operator": ">=", "value": frame_range[0]},
                 {"field": "endFrame", "operator": "<=", "value": frame_range[1]},
-                {"field": "entityId", "operator": "=", "value": self.video_id}
+                {"field": "entityId", "operator": "=", "value": self.video_id},
             ],
         )
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
@@ -1493,20 +1519,22 @@ class Track:
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
-    
-    def _upload_iteration_and_update_timelines(self, frame_from, frame_to, timelines_indexes, predictions, transaction_id):
-            frame_range = (frame_from + 1, frame_to)
-            self._upload_iteration(predictions, frame_range, transaction_id)
-            self.update_timelines(
-                frame_from, frame_to, timelines_indexes, predictions
-            )
-            self.refresh_progress()
-            self.progress.notify()
+
+    def _upload_iteration_and_update_timelines(
+        self, frame_from, frame_to, timelines_indexes, predictions, transaction_id
+    ):
+        frame_range = (frame_from + 1, frame_to)
+        self._upload_iteration(predictions, frame_range, transaction_id)
+        self.update_timelines(frame_from, frame_to, timelines_indexes, predictions)
+        self.refresh_progress()
+        self.progress.notify()
 
     def _upload_loop(self):
         while not self._upload_queue.empty():
             predictions, frame_range, timelines_indexes, transaction_id = self._upload_queue.get()
-            self._upload_iteration_and_update_timelines(frame_range, timelines_indexes, predictions, transaction_id)
+            self._upload_iteration_and_update_timelines(
+                frame_range, timelines_indexes, predictions, transaction_id
+            )
 
     def upload_predictions_and_update_timelines(
         self,
