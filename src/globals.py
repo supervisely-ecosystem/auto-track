@@ -222,6 +222,14 @@ class NN:
         cloud_url="",
         params={},
     )
+    VIDEO_LIVE_TRAINING = NeuralNetwork(
+        name="video live training",
+        module_id=459,
+        title="Video Live Training",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
 nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack, NN.SAM3]
@@ -233,7 +241,7 @@ geometry_nn = {
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
     GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2, NN.SAM3],
     GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2, NN.SAM3],
-    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8],
+    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8, NN.VIDEO_LIVE_TRAINING],
     GEOMETRY_NAME.ORIENTED_BBOX: [NN.MIX_FORMER],
 }
 
