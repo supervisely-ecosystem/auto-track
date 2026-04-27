@@ -578,9 +578,7 @@ class Progress:
             },
         )
 
-        self.track.api.video.notify_progress(
-            self.track.track_id,
-            self.track.video_id,
+        self.track.notify_progress(
             self.frame_range[0] + 1,
             self.frame_range[1],
             pos,
@@ -667,6 +665,7 @@ class Track:
         self.detections_cache = {}
         self.detection_enabled = detection_enabled
         self.disappear_enabled = disappear_enabled
+        self.tracked_frames_count = {}
 
         self.no_object_tag_ids = [
             t.id
@@ -806,6 +805,40 @@ class Track:
             current += timeline.get_progress_current()
         self.progress.total = total
         self.progress.current = current
+
+    def notify_progress(self, frame_start: int, frame_end: int, current: int, total: int):
+        self.api.post(
+            "videos.notify-annotation-tool",
+            {
+                "type": "videos:fetch-figures-in-range",
+                "data": {
+                    ApiField.TRACK_ID: self.track_id,
+                    ApiField.VIDEO_ID: self.video_id,
+                    ApiField.FRAME_RANGE: [frame_start, frame_end],
+                    ApiField.PROGRESS: {
+                        ApiField.CURRENT: current,
+                        ApiField.TOTAL: total,
+                    },
+                    "trackedFrames": {
+                        str(frame_index): count
+                        for frame_index, count in sorted(self.tracked_frames_count.items())
+                    },
+                },
+            },
+        )
+
+    def update_tracked_frames_count(
+        self, figures: List[FigureInfo], increment: int = 1, bad_object_ids: List[int] = None
+    ):
+        bad_object_ids = set(bad_object_ids or [])
+        for figure in figures:
+            if figure.object_id in bad_object_ids:
+                continue
+            count = self.tracked_frames_count.get(figure.frame_index, 0) + increment
+            if count <= 0:
+                self.tracked_frames_count.pop(figure.frame_index, None)
+            else:
+                self.tracked_frames_count[figure.frame_index] = count
 
     def get_batch(self, batch_size: int = None):
         if batch_size is None:
@@ -1515,8 +1548,10 @@ class Track:
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
         if figures_to_delete:
             self._remove_figures(figures_to_delete)
+            self.update_tracked_frames_count(figures_to_delete, increment=-1)
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
+        self.update_tracked_frames_count(figures, bad_object_ids=bad_object_ids)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
 
