@@ -665,7 +665,7 @@ class Track:
         self.detections_cache = {}
         self.detection_enabled = detection_enabled
         self.disappear_enabled = disappear_enabled
-        self.tracked_frames_count = {}
+        self.tracked_figures_count = {}
 
         self.no_object_tag_ids = [
             t.id
@@ -819,26 +819,30 @@ class Track:
                         ApiField.CURRENT: current,
                         ApiField.TOTAL: total,
                     },
-                    "trackedFrames": {
-                        str(frame_index): count
-                        for frame_index, count in sorted(self.tracked_frames_count.items())
+                    "trackedFigures": {
+                        str(figure_id): count
+                        for figure_id, count in sorted(self.tracked_figures_count.items())
                     },
                 },
             },
         )
 
-    def update_tracked_frames_count(
+    def update_tracked_figures_count(
         self, figures: List[FigureInfo], increment: int = 1, bad_object_ids: List[int] = None
     ):
         bad_object_ids = set(bad_object_ids or [])
         for figure in figures:
             if figure.object_id in bad_object_ids:
                 continue
-            count = self.tracked_frames_count.get(figure.frame_index, 0) + increment
+            source_figure_id = figure.meta.get("sourceFigureId", figure.id)
+            if source_figure_id is None:
+                continue
+            source_figure_id = str(source_figure_id)
+            count = self.tracked_figures_count.get(source_figure_id, 0) + increment
             if count <= 0:
-                self.tracked_frames_count.pop(figure.frame_index, None)
+                self.tracked_figures_count.pop(source_figure_id, None)
             else:
-                self.tracked_frames_count[figure.frame_index] = count
+                self.tracked_figures_count[source_figure_id] = count
 
     def get_batch(self, batch_size: int = None):
         if batch_size is None:
@@ -1104,16 +1108,17 @@ class Track:
                 if prediction is None:
                     result[-1].append(None)
                 else:
-                    result[-1].append(
-                        utils.figure_from_prediction(
-                            prediction=prediction,
-                            figure_id=None,  # figure is not uploaded yet
-                            object_id=src_figure.object_id,
-                            frame_index=frame_from + 1 + i,
-                            track_id=self.track_id,
-                            crop=(self.video_info.frame_height, self.video_info.frame_width),
-                        )
+                    source_figure_id = src_figure.meta.get("sourceFigureId", src_figure.id)
+                    predicted_figure = utils.figure_from_prediction(
+                        prediction=prediction,
+                        figure_id=source_figure_id,
+                        object_id=src_figure.object_id,
+                        frame_index=frame_from + 1 + i,
+                        track_id=self.track_id,
+                        crop=(self.video_info.frame_height, self.video_info.frame_width),
                     )
+                    predicted_figure.meta["sourceFigureId"] = source_figure_id
+                    result[-1].append(predicted_figure)
         return result
 
     def predict_batch(
@@ -1548,10 +1553,10 @@ class Track:
         figures_to_delete = [figure for figure in figures_to_delete if figure.track_id is not None]
         if figures_to_delete:
             self._remove_figures(figures_to_delete)
-            self.update_tracked_frames_count(figures_to_delete, increment=-1)
+            self.update_tracked_figures_count(figures_to_delete, increment=-1)
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
-        self.update_tracked_frames_count(figures, bad_object_ids=bad_object_ids)
+        self.update_tracked_figures_count(figures, bad_object_ids=bad_object_ids)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
 
