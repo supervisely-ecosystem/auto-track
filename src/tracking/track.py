@@ -807,22 +807,17 @@ class Track:
         self.progress.current = current
 
     def notify_progress(self, frame_start: int, frame_end: int, current: int, total: int):
-        self.api.post(
-            "videos.notify-annotation-tool",
-            {
-                "type": "videos:fetch-figures-in-range",
-                "data": {
-                    ApiField.TRACK_ID: self.track_id,
-                    ApiField.VIDEO_ID: self.video_id,
-                    ApiField.FRAME_RANGE: [frame_start, frame_end],
-                    ApiField.PROGRESS: {
-                        ApiField.CURRENT: current,
-                        ApiField.TOTAL: total,
-                    },
-                    "trackedFigures": {
-                        str(figure_id): count
-                        for figure_id, count in sorted(self.tracked_figures_count.items())
-                    },
+        self.api.video.notify_progress(
+            self.track_id,
+            self.video_id,
+            frame_start,
+            frame_end,
+            current,
+            total,
+            extra_data={
+                "trackedFigures": {
+                    str(figure_id): count
+                    for figure_id, count in sorted(self.tracked_figures_count.items())
                 },
             },
         )
