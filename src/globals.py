@@ -230,9 +230,28 @@ class NN:
         cloud_url="",
         params={},
     )
+    LIVE_TRAINING_OBJECT_DETECTION = NeuralNetwork(
+        name="live training object detection",
+        module_id=api.app.get_ecosystem_module_id("supervisely-ecosystem/live-training-detection"),
+        title="Live Training Object Detection",
+        description="",
+        cloud_url="",
+        params={},
+    )
 
 
-nns = [NN.MIX_FORMER, NN.XMEM, NN.CO_TRACKER, NN.CLICKSEG, NN.YOLOV8, NN.SAM2, NN.MCITrack, NN.SAM3, NN.VIDEO_LIVE_TRAINING]
+nns = [
+    NN.MIX_FORMER,
+    NN.XMEM,
+    NN.CO_TRACKER,
+    NN.CLICKSEG,
+    NN.YOLOV8,
+    NN.SAM2,
+    NN.MCITrack,
+    NN.SAM3,
+    NN.VIDEO_LIVE_TRAINING,
+    NN.LIVE_TRAINING_OBJECT_DETECTION,
+]
 geometry_nn = {
     GEOMETRY_NAME.RECTANGLE: [NN.MCITrack, NN.MIX_FORMER, NN.SAM3],
     GEOMETRY_NAME.POINT: [NN.CO_TRACKER],
@@ -241,7 +260,11 @@ geometry_nn = {
     GEOMETRY_NAME.GRAPH_NODES: [NN.CO_TRACKER],
     GEOMETRY_NAME.BITMAP: [NN.XMEM, NN.SAM2, NN.SAM3],
     GEOMETRY_NAME.SMARTTOOL: [NN.CLICKSEG, NN.SAM2, NN.SAM3],
-    GEOMETRY_NAME.DETECTOR: [NN.YOLOV8, NN.VIDEO_LIVE_TRAINING],
+    GEOMETRY_NAME.DETECTOR: [
+        NN.YOLOV8,
+        NN.VIDEO_LIVE_TRAINING,
+        NN.LIVE_TRAINING_OBJECT_DETECTION,
+    ],
     GEOMETRY_NAME.ORIENTED_BBOX: [NN.MIX_FORMER],
 }
 
