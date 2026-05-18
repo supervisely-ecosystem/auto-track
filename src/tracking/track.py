@@ -457,7 +457,11 @@ class Timeline:
                                 {"field": "objectId", "operator": "=", "value": self.object_id},
                                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                                 {"field": "endFrame", "operator": "<=", "value": frame_index},
-                                {"field": "entityId", "operator": "=", "value": self.track.video_id},
+                                {
+                                    "field": "entityId",
+                                    "operator": "=",
+                                    "value": self.track.video_id,
+                                },
                             ],
                         )
                     tracklet.last_tracked = (frame_index, frame_figures)
@@ -880,7 +884,7 @@ class Track:
             self.continue_track(update.frame_index, update.frames_count)
         elif update.type == Update.Type.DELETE:
             # removal is done on the web
-            sly.logger.debug("Skipped object_removed update", extra={"update": update})  
+            sly.logger.debug("Skipped object_removed update", extra={"update": update})
             # self.object_removed(update.object_ids[0], update.frame_index, update.frames_count)
         elif update.type == Update.Type.REMOVE_TAG:
             self.no_object_tag_removed(update.object_ids[0], update.frame_index)
@@ -983,9 +987,11 @@ class Track:
         """
         self.logger.debug("Tracking geometry type %s", geometry_type, extra=self.logger_extra)
         try:
+            print(self.nn_settings)
             validate_nn_settings_for_geometry(self.nn_settings, geometry_type, logger=self.logger)
         except Exception as e:
             message = f"Invalid settings for geometry type {geometry_type}, this geometry will not be tracked."
+            print(message)
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
             return None
 
