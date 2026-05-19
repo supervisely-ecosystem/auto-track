@@ -22,21 +22,6 @@ from src.tracking.interpolation import interpolate_next
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
 ) -> Tuple[bool, List[str]]:
-    nn_settings = {
-        "rectangle": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "point": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "line": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "polygon": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "graph": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "bitmap": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "smarttool": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-        "detector": {
-            "task_id": 59875,
-            "inference_settings": {"confidence_threshold": 0.3},
-            "extra_params": {"enabled": True, "threshold": 0.1},
-        },
-        "oriented_bbox": {"task_id": None, "inference_settings": {}, "extra_params": {}},
-    }
     geoms_to_validate = [geometry_name]
     if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
         geoms_to_validate.extend([g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT])
@@ -45,8 +30,8 @@ def validate_nn_settings_for_geometry(
         if geom not in nn_settings:
             print(f"invalid geom: {geom}")
             invalid.append(geom)
-        elif "task_id" in nn_settings[geom] and nn_settings[geom].get("task_id", None) is None:
-            invalid.append(geom)
+        # elif "task_id" in nn_settings[geom] and nn_settings[geom].get("task_id", None) is None:
+        #     invalid.append(geom)
     if len(invalid) > 0:
         print(f"nn settings: {nn_settings}")
         if raise_error:
