@@ -22,6 +22,7 @@ from src.tracking.interpolation import interpolate_next
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
 ) -> Tuple[bool, List[str]]:
+    print(f"nn settings: {nn_settings}")
     geoms_to_validate = [geometry_name]
     if geometry_name == g.GEOMETRY_NAME.SMARTTOOL:
         geoms_to_validate.extend([g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT])
@@ -33,7 +34,6 @@ def validate_nn_settings_for_geometry(
         # elif "task_id" in nn_settings[geom] and nn_settings[geom].get("task_id", None) is None:
         #     invalid.append(geom)
     if len(invalid) > 0:
-        print(f"nn settings: {nn_settings}")
         if raise_error:
             raise ValueError(f"NN settings for {', '.join(invalid)} are not specified")
         if logger is not None:
