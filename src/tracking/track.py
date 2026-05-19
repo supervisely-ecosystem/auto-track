@@ -32,6 +32,7 @@ def validate_nn_settings_for_geometry(
         elif "task_id" in nn_settings[geom] and nn_settings[geom].get("task_id", None) is None:
             invalid.append(geom)
     if len(invalid) > 0:
+        print(f"nn settings: {nn_settings}")
         if raise_error:
             raise ValueError(f"NN settings for {', '.join(invalid)} are not specified")
         if logger is not None:
@@ -1204,6 +1205,8 @@ class Track:
             frame_from,
             frame_to,
         )
+        print(f"frame from: {frame_from}, frame to: {frame_to}")
+        print(f"detections: {detections}")
         get_detections_time = get_detections_time.get_sec()
         matching_time = TinyTimer()
         for i, frame_detections in enumerate(detections):
