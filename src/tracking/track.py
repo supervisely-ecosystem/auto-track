@@ -987,11 +987,9 @@ class Track:
         """
         self.logger.debug("Tracking geometry type %s", geometry_type, extra=self.logger_extra)
         try:
-            print(self.nn_settings)
             validate_nn_settings_for_geometry(self.nn_settings, geometry_type, logger=self.logger)
         except Exception as e:
             message = f"Invalid settings for geometry type {geometry_type}, this geometry will not be tracked."
-            print(message)
             utils.notify_warning(self.api, self.track_id, self.video_id, message)
             return None
 
