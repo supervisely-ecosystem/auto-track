@@ -1,1 +1,5 @@
 git+https://github.com/supervisely/supervisely.git@test-autotrack
+lap
+cython_bbox
+scipy
+scikit-image
