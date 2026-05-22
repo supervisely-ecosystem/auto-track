@@ -42,3 +42,4 @@ jobs:
       skip_tag_check: ${{ inputs.skip_tag_check }}
       no_cache_requirements: ${{ inputs.no_cache_requirements }}
       build_cache: ${{ inputs.build_cache }}
+      extra_builder_libs: "build-essential"

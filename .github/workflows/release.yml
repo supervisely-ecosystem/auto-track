@@ -13,6 +13,7 @@ jobs:
     with:
       cve_checks: true
       no_cache_requirements: true
+      extra_builder_libs: "build-essential"
 
   Supervisely-Release:
     if: "!github.event.release.prerelease"
