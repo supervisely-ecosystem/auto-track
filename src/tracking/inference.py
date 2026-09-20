@@ -1,12 +1,12 @@
 from typing import Dict, List
 import uuid
-import requests
 from concurrent.futures import ThreadPoolExecutor
 
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
 
 import src.utils as utils
+from .request_control import BoundedSession, post_model, READ_TIMEOUT_SECONDS
 
 
 def _fix_unbound(rect: utils.Prediction, point: utils.Prediction):
@@ -99,7 +99,7 @@ def _smart_segmentation_with_app(
         task_id,
         "smart_segmentation_batch",
         data={},
-        context=context,
+        context=context, retries=1, timeout=READ_TIMEOUT_SECONDS,
     )
     result = []
     for frame in r_data:
@@ -149,15 +149,14 @@ def _smart_segmentation_by_url(
             for i, (crop, positive, negative) in enumerate(zip(crops, positives, negatives))
         ]
     }
-    r = requests.post(
-        f"{nn_url}/smart_segmentation_batch",
-        json={
+    r = post_model(
+        api, f"{nn_url}/smart_segmentation_batch",
+        {
             "state": {},
             "context": context,
             "server_address": api.server_address,
             "api_token": api.token,
         },
-        timeout=60,
     )
     r.raise_for_status()
     r_data = r.json()
@@ -205,10 +204,9 @@ def predict_by_url(
         "frames": frames_count,
         "input_geometries": geometries,
     }
-    response = requests.post(
-        f"{nn_url}/track-api",
-        json={"context": context, "server_address": api.server_address, "api_token": api.token},
-        timeout=60,
+    response = post_model(
+        api, f"{nn_url}/track-api",
+        {"context": context, "server_address": api.server_address, "api_token": api.token},
     )
     response.raise_for_status()
     results = response.json()
@@ -244,7 +242,8 @@ def predict_with_app(
         "input_geometries": geometries,
         # "direction": "forward"  # optional
     }
-    response = api.task.send_request(task_id, "track-api", {}, context=data, retries=1)
+    response = api.task.send_request(task_id, "track-api", {}, context=data, retries=1,
+                                     timeout=READ_TIMEOUT_SECONDS)
 
     results = [
         [
@@ -460,7 +459,7 @@ def predict_smarttool(
 
 def get_detections(api: sly.Api, nn_settings: Dict, video_id: int, frame_from, frame_to):
     if "task_id" in nn_settings:
-        session = sly.nn.inference.Session(
+        session = BoundedSession(
             api,
             nn_settings["task_id"],
             inference_settings=nn_settings.get("inference_settings", {}),

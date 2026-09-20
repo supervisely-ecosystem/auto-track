@@ -6,6 +6,7 @@ import src.globals as g
 from src.ui import layout, get_nn_settings, update_all_nn, get_disappear_parameters
 from src.tracking import track, cache_video, interpolate_frames
 from src.tracking.track import Update, Track
+from src.tracking.request_control import register_operation, stop_operation
 
 app = sly.Application(layout=layout)
 
@@ -24,6 +25,7 @@ def start_track(request: Request, task: BackgroundTasks):
     context = request.state.context
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    register_operation(context["trackId"])
     task.add_task(
         track,
         api,
@@ -48,6 +50,7 @@ def start_tracking_by_detection(request: Request, task: BackgroundTasks):
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
     context["trackingByDetection"] = True
+    register_operation(context["trackId"])
     task.add_task(
         track,
         api,
@@ -193,6 +196,7 @@ def continue_track(request: Request, task: BackgroundTasks):
     context = request.state.context
     cloud_token = request.headers.get("x-sly-cloud-token", None)
     cloud_action_id = request.headers.get("x-sly-cloud-action-id", None)
+    register_operation(context["trackId"])
     task.add_task(
         track,
         api,
@@ -287,10 +291,7 @@ def stop_tracking(request: Request, task: BackgroundTasks):
     sly.logger.debug("recieved call to /stop_tracking", extra={"context": request.state.context})
     context = request.state.context
     track_id = context["trackId"]
-    cur_track = g.current_tracks.get(track_id, None)
-    if cur_track is None:
-        return
-    cur_track.stop()
+    stop_operation(track_id)
 
 
 @server.post("/interpolate")

@@ -2,7 +2,8 @@ import supervisely as sly
 from supervisely.app.widgets import Empty
 
 import src.globals as g
-from .classes import DeployAppParameters, DeployAppByGeometry, GeometryCard
+from .classes import DeployAppParameters, DeployAppByGeometry
+from .model_row import ModelRow
 
 
 GEOMETRIES = (
@@ -10,7 +11,7 @@ GEOMETRIES = (
         g.GEOMETRY_NAME.RECTANGLE,
         {
             "title": "Bounding Box",
-            "description": "Select NN model for Bounding box figures",
+            "description": "Track rectangular object boxes.",
             "geometries": [g.GEOMETRY_NAME.RECTANGLE],
             "interpolation_supported": True,
         },
@@ -18,8 +19,8 @@ GEOMETRIES = (
     (
         g.GEOMETRY_NAME.POINT,
         {
-            "title": "Point based geometries",
-            "description": "Select NN model for Point, Polyline, Polygon and Keypoints figures",
+            "title": "Point-based",
+            "description": "Track points, polylines, polygons and skeletons.",
             "geometries": [
                 g.GEOMETRY_NAME.POINT,
                 g.GEOMETRY_NAME.POLYLINE,
@@ -33,7 +34,7 @@ GEOMETRIES = (
         sly.Bitmap.geometry_name(),
         {
             "title": "Mask",
-            "description": "Select NN model for Mask figures",
+            "description": "Track object masks across frames.",
             "geometries": [sly.Bitmap.geometry_name()],
             "interpolation_supported": False,
         },
@@ -43,8 +44,7 @@ GEOMETRIES = (
         {
             "title": "Smart Tool",
             "description": (
-                "Select NN model for SmartTool. When tracking Box and points for smarttool "
-                "annotation will be predicted using NN models selected in the previous steps."
+                "Create masks interactively. Tracking also requires Bounding Box and Points models."
             ),
             "geometries": [g.GEOMETRY_NAME.SMARTTOOL],
             "extra_params": {
@@ -62,7 +62,7 @@ GEOMETRIES = (
         g.GEOMETRY_NAME.DETECTOR,
         {
             "title": "Detector",
-            "description": "Select NN model for detection",
+            "description": "Find new objects automatically. Also configure a tracker for their geometry.",
             "geometries": [g.GEOMETRY_NAME.DETECTOR],
             "extra_params": {
                 "enabled": {
@@ -87,13 +87,25 @@ GEOMETRIES = (
     (
         g.GEOMETRY_NAME.ORIENTED_BBOX,
         {
-            "title": "Oriented Bounding Box",
-            "description": "Select NN model for Oriented Bounding Box figures",
+            "title": "Oriented Box",
+            "description": "Track rotated object boxes.",
             "geometries": [g.GEOMETRY_NAME.ORIENTED_BBOX],
             "interpolation_supported": True,
         },
     ),
 )
+GEOMETRIES = tuple(sorted(GEOMETRIES, key=lambda item: [
+    g.GEOMETRY_NAME.RECTANGLE, g.GEOMETRY_NAME.POINT, g.GEOMETRY_NAME.SMARTTOOL,
+    g.GEOMETRY_NAME.DETECTOR, sly.Bitmap.geometry_name(), g.GEOMETRY_NAME.ORIENTED_BBOX,
+].index(item[0])))
+GEOMETRY_ICONS = {
+    g.GEOMETRY_NAME.RECTANGLE: "zmdi zmdi-crop-din",
+    g.GEOMETRY_NAME.POINT: "zmdi zmdi-dot-circle-alt",
+    g.GEOMETRY_NAME.SMARTTOOL: "zmdi zmdi-colorize",
+    g.GEOMETRY_NAME.DETECTOR: "zmdi zmdi-center-focus-strong",
+    sly.Bitmap.geometry_name(): "zmdi zmdi-brush",
+    g.GEOMETRY_NAME.ORIENTED_BBOX: "zmdi zmdi-rotate-cw",
+}
 EMPTY = Empty()
 DEPLOY_APPS_PARAMETERS = {nn.name: DeployAppParameters(nn) for nn in g.nns}
 DEPLOY_APP_BY_GEOMETRY = {
@@ -101,13 +113,14 @@ DEPLOY_APP_BY_GEOMETRY = {
     for geometry_name, details in GEOMETRIES
 }
 GEOMETRY_CARDS = {
-    geometry_name: GeometryCard(
+    geometry_name: ModelRow(
         geometries=details["geometries"],
         title=details["title"],
         deploy_app=DEPLOY_APP_BY_GEOMETRY[geometry_name],
         description=details["description"],
         extra_params=details.get("extra_params", {}),
-        intrepolation_supported=details.get("interpolation_supported", False)
+        interpolation_supported=details.get("interpolation_supported", False),
+        icon=GEOMETRY_ICONS[geometry_name]
     )
     for geometry_name, details in GEOMETRIES
 }

@@ -6,6 +6,8 @@ import threading
 import time
 import uuid
 
+import requests
+
 import numpy as np
 import supervisely as sly
 from supervisely.api.entity_annotation.figure_api import FigureInfo
@@ -17,6 +19,8 @@ import src.globals as g
 import src.utils as utils
 import src.tracking.inference as inference
 from src.tracking.interpolation import interpolate_next
+from src.tracking.request_control import TrackingCancelled, post_billing
+from src.tracking.operation import run_operation
 
 
 def validate_nn_settings_for_geometry(
@@ -578,7 +582,9 @@ class Progress:
             },
         )
 
-        self.track.api.video.notify_progress(
+        if self.track.global_stop_indicator and not stop:
+            return
+        stopped = self.track.api.video.notify_progress(
             self.track.track_id,
             self.track.video_id,
             self.frame_range[0] + 1,
@@ -586,6 +592,8 @@ class Progress:
             pos,
             self.total,
         )
+        if stopped:
+            self.track.stop()
 
 
 class Update:
@@ -687,7 +695,6 @@ class Track:
             extra={**self.logger_extra, "time": f"{init_timelines_time:.6f} sec"},
         )
 
-        self.global_stop_indicator = False
         self.progress = Progress(self)
         self.progress.frame_range = self.frame_ranges[0]
         self.refresh_progress()
@@ -914,7 +921,7 @@ class Track:
                     "Received updates after tracking finished", extra={**self.logger_extra}
                 )
                 return True
-            time.sleep(1)
+            self.api.cancellation.wait(1)
             if (i + 1) % 10 == 0:
                 self.logger.debug(
                     "Waiting for updates %s/%s seconds...",
@@ -924,7 +931,6 @@ class Track:
                 )
             if self.global_stop_indicator:
                 self.logger.info("Tracking stopped by user.", extra={**self.logger_extra})
-                self.progress.notify(stop=True)
                 return False
         return False
 
@@ -934,12 +940,8 @@ class Track:
         if self.cloud_token is None or self.cloud_action_id is None:
             return
         try:
-            transaction_id = self.api.cloud.billing_reserve(
-                self.user_id,
-                items_count=items_count,
-                cloud_token=self.cloud_token,
-                cloud_action_id=self.cloud_action_id,
-            )["transactionId"]
+            transaction_id = post_billing(self.api, "reserve", self.user_id, items_count,
+                                          self.cloud_token, self.cloud_action_id)["transactionId"]
             return transaction_id
         except Exception:
             self.logger.error(
@@ -952,13 +954,8 @@ class Track:
     def withdraw_billing(self, transaction_id: str, items_count: int):
         if self.cloud_token is not None and self.cloud_action_id is not None:
             try:
-                self.api.cloud.billing_withdrawal(
-                    self.user_id,
-                    items_count=items_count,
-                    transaction_id=transaction_id,
-                    cloud_token=self.cloud_token,
-                    cloud_action_id=self.cloud_action_id,
-                )
+                post_billing(self.api, "withdrawal", self.user_id, items_count,
+                             self.cloud_token, self.cloud_action_id, transaction_id)
             except Exception:
                 self.logger.error(
                     "Unable to withdraw tokens for predictions",
@@ -1046,6 +1043,8 @@ class Track:
                     frames_count=frames_count,
                 )
 
+        except (TrackingCancelled, requests.Timeout):
+            raise
         except Exception as e:
             _, exc_str = utils.parse_exception(
                 e, {"geometry": geometry_type, "frames": [frame_from, frame_to]}
@@ -1181,6 +1180,7 @@ class Track:
                 x_from,
                 frame_to,
             )
+            self.api.check_cancelled()
             for i, frame_detections in enumerate(detections):
                 self.detections_cache[x_from + i] = (frame_detections, conf)
         return [self.detections_cache[x][0] for x in range(frame_from, frame_to + 1)]
@@ -1251,6 +1251,7 @@ class Track:
                 },
             )
             return
+        self.api.check_cancelled()
         upload_time = TinyTimer()
         objects = sly.VideoObjectCollection()
         figures: List[sly.VideoFigure] = []
@@ -1391,6 +1392,8 @@ class Track:
     def _safe_upload_figures(self, figures: List[FigureInfo]):
         try:
             return self._upload_figures(figures), []
+        except (TrackingCancelled, requests.Timeout):
+            raise
         except Exception:
             self.logger.warning("Unable to upload figures", exc_info=True, extra=self.logger_extra)
         figures_by_object = {}
@@ -1525,6 +1528,7 @@ class Track:
     ):
         frame_range = (frame_from + 1, frame_to)
         self._upload_iteration(predictions, frame_range, transaction_id)
+        self.api.check_cancelled()
         self.update_timelines(frame_from, frame_to, timelines_indexes, predictions)
         self.refresh_progress()
         self.progress.notify()
@@ -1593,7 +1597,6 @@ class Track:
         while True:  # Main loop
             if self.global_stop_indicator:
                 self.logger.info("Tracking stopped by user.", extra=self.logger_extra)
-                self.progress.notify(stop=True)
                 return
 
             total_tm = TinyTimer()
@@ -1638,10 +1641,6 @@ class Track:
                 },
             )
 
-            # load detections in parallel
-            if self.is_detection_enabled():
-                threading.Thread(target=self.get_detections, args=(frame_from, frame_to)).start()
-
             # billing reserve
             frames_count = frame_to - frame_from
             expected_predictions_count = sum(
@@ -1653,6 +1652,7 @@ class Track:
             batch_prediction_time, batch_predictions = utils.time_it(
                 self.predict_batch, frame_from, frame_to, timelines_figures
             )
+            self.api.check_cancelled()
             batch_predictions: List[List[List[FigureInfo]]]
 
             # filter disappearing figures
@@ -1883,8 +1883,12 @@ class Track:
     def prevent_object_upload(self, object_id: int, frame_range: Tuple[int, int]):
         self.prevent_upload_objects.append((object_id, frame_range, time.time()))
 
+    @property
+    def global_stop_indicator(self):
+        return self.api.cancellation.is_set()
+
     def stop(self):
-        self.global_stop_indicator = True
+        self.api.cancellation.set()
 
 
 @utils.send_error_data
@@ -2017,50 +2021,4 @@ def track(
             threading.Thread(target=cur_track.apply_updates).start()
         return
 
-    # track
-    session_id = context.get("sessionId", context.get("session_id", None))
-    if session_id is None:
-        api.logger.warn("Session id is not provided. Some features may not work correctly.")
-    track_id = context["trackId"]
-    video_id = context["videoId"]
-    object_ids = list(context["objectIds"])
-    frame_index = context["frameIndex"]
-    frames_count = context["frames"]
-    detection_enabled = context.get("trackByDetection", True)
-    user_id = api.user.get_my_info().id
-    # direction = context["direction"]
-    with g.tracks_lock:
-        cur_track: Track = g.current_tracks.get(track_id, None)
-        if cur_track is not None:
-            cur_track.append_update(Update(object_ids, frame_index, frames_count, update_type))
-            cur_track.disappear_params = disappear_params
-            return
-        api.retry_count = 1
-        cur_track = Track(
-            track_id=track_id,
-            session_id=session_id,
-            api=api,
-            video_id=video_id,
-            object_ids=object_ids,
-            frame_index=frame_index,
-            frames_count=frames_count,
-            nn_settings=nn_settings,
-            user_id=user_id,
-            cloud_token=cloud_token,
-            cloud_action_id=cloud_action_id,
-            disappear_params=disappear_params,
-            detection_enabled=detection_enabled,
-            disappear_enabled=disappear_enabled,
-        )
-        api.logger.info("Start tracking.")
-        g.current_tracks[track_id] = cur_track
-        if not cur_track.validate_timelines():
-            cur_track.nullify_progress()
-            raise ValueError("No settings for selected geometries. Tracking stopped.")
-    try:
-        cur_track.run()
-    finally:
-        if not cur_track.global_stop_indicator:
-            cur_track.progress.notify(stop=True)
-        g.current_tracks.pop(track_id, None)
-        api.logger.debug("Tracking completed.")
+    run_operation(api, context, nn_settings, disappear_params, cloud_token, cloud_action_id, update_type)

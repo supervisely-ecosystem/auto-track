@@ -11,22 +11,21 @@ from supervisely.app.widgets import (
     Checkbox,
 )
 from supervisely import logger
-import yaml
 
 import src.globals as g
 from .common import GEOMETRY_CARDS
+from .model_table.model_table import ModelTable
 
 
 select_nn_settings_text = Text(
-    "<b>Select neural network settings:</b>",
+    "<b>Set up Auto Track</b>",
     font_size=21,
 )
 select_nn_settings_description_text = Text(
     (
-        "<b>Select NN model settings for each geometry type. "
-        "This model will be used to track objects in Video Labeling Tool.</b>"
+        "Choose an existing model or deploy a new one for each geometry you want to track."
     ),
-    font_size=15,
+    font_size=14,
 )
 disappear_threshold = InputNumber(min=0.05, max=0.95, step=0.05, value=0.2)
 disappear_threshold_field = Field(
@@ -129,7 +128,7 @@ for input_ in disappear_parameters_inputs:
 
 
 disappear_parameters_card = Card(
-    title="Disappear parameters",
+    title="Object disappearance · advanced settings",
     description="Parameters for object disappearance detection.",
     content=Container(
         widgets=[
@@ -144,9 +143,11 @@ disappear_parameters_card.collapse()
 layout = Container(
     widgets=[
         Container(widgets=[select_nn_settings_text, select_nn_settings_description_text], gap=5),
-        *[card.card for card in GEOMETRY_CARDS.values()],
+        ModelTable(list(GEOMETRY_CARDS.values())),
         disappear_parameters_card,
-    ]
+    ],
+    gap=10,
+    style="max-width: 1100px; margin: 0 auto; padding: 12px;",
 )
 
 
@@ -156,34 +157,11 @@ def update_all_nn():
 
 
 def get_nn_settings():
-    settings = {}
-    for geometry_card in GEOMETRY_CARDS.values():
-        selector, app_selector = geometry_card.get_selectors()
-        selector_value = selector.get_value()
-        extra_params = geometry_card.get_extra_params()
-        for geometry_name in geometry_card.geometries:
-            if selector_value == "url":
-                url = geometry_card.nn_url_input.get_value()
-                settings[geometry_name] = {"url": url}
-            elif selector_value == "interpolation":
-                settings[geometry_name] = {"interpolation": True}
-            else:
-                session = app_selector.get_value()
-                settings[geometry_name] = {"task_id": session}
-            inf_settings = geometry_card.get_inference_settings().get_text()
-            if inf_settings == "":
-                inf_settings = {}
-            else:
-                inf_settings = yaml.safe_load(inf_settings)
-            settings[geometry_name]["inference_settings"] = inf_settings
-            settings[geometry_name]["extra_params"] = {}
-            for name, widget in extra_params.items():
-                if isinstance(widget, Checkbox):
-                    settings[geometry_name]["extra_params"][name] = widget.is_checked()
-                elif hasattr(widget, "get_value"):
-                    settings[geometry_name]["extra_params"][name] = widget.get_value()
-
-    return settings
+    return {
+        geometry: card.get_settings()
+        for card in GEOMETRY_CARDS.values()
+        for geometry in card.geometries
+    }
 
 
 def get_disappear_parameters():

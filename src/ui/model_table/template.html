@@ -1,0 +1,29 @@
+<el-table class="ultra-table" style="border-radius: 5px;" :data="data.{{{widget.widget_id}}}.rows" aria-label="Models used by Auto Track">
+  <el-table-column label="Used for" min-width="180">
+    <template scope="scope">
+      <i :class="scope.row.icon" class="mr10" aria-hidden="true"></i>{{ scope.row.title }}
+    </template>
+  </el-table-column>
+  {% for label, attribute, width in [('Model', 'model_name', 175), ('Status', 'status', 165), ('Setup', 'configure_button', 105)] %}
+  <el-table-column label="{{{label}}}" min-width="{{{width}}}">
+    <template scope="scope">
+      {% for row in widget.rows %}
+      <div v-if="scope.row.index === {{{loop.index0}}}">
+        {% if attribute == 'model_name' %}
+        <el-tooltip v-if="!data.{{{row.settings.button.widget_id}}}.disabled" content="Inference settings" placement="top">
+          <span>{{{row.settings.button}}}</span>
+        </el-tooltip>
+        <span v-else>{{{row.model_name}}}</span>
+        {% else %}
+        {{{row[attribute]}}}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </template>
+  </el-table-column>
+  {% endfor %}
+</el-table>
+{% for row in widget.rows %}
+{{{row.configuration.dialog}}}
+{{{row.settings.dialog}}}
+{% endfor %}
