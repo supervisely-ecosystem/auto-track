@@ -1,6 +1,8 @@
 from typing import List, Dict, NamedTuple, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor, Future
 from logging import Logger
+import hashlib
+import json
 import queue
 import threading
 import time
@@ -17,6 +19,11 @@ import src.globals as g
 import src.utils as utils
 import src.tracking.inference as inference
 from src.tracking.interpolation import interpolate_next
+
+# The same objects sent over the same frames get the same answer back, so a
+# track that keeps re-sending one chunk is stuck, not slow. The bound leaves
+# room for a user re-tracking an unchanged object from the same frame.
+MAX_SAME_CHUNK_ATTEMPTS = 5
 
 
 def validate_nn_settings_for_geometry(
@@ -667,6 +674,8 @@ class Track:
         self.detections_cache = {}
         self.detection_enabled = detection_enabled
         self.disappear_enabled = disappear_enabled
+        self._chunk_attempts: Dict[str, int] = {}
+        self._stopped_object_ids: Set[int] = set()
 
         self.no_object_tag_ids = [
             t.id
@@ -811,7 +820,9 @@ class Track:
         if batch_size is None:
             batch_size = self.batch_size
         tl_batches = [
-            [*tl.get_batch(batch_size), tl_index] for tl_index, tl in enumerate(self.timelines)
+            [*tl.get_batch(batch_size), tl_index]
+            for tl_index, tl in enumerate(self.timelines)
+            if tl.object_id not in self._stopped_object_ids
         ]  # frame_from, frame_to, figures, tl_index
         tl_batches = [
             tl_batch for tl_batch in tl_batches if tl_batch[0] is not None and tl_batch[2]
@@ -1082,6 +1093,41 @@ class Track:
                         )
                     )
         return result
+
+    def _count_chunk_attempt(
+        self, frame_from: int, frame_to: int, timelines_figures: List[List[FigureInfo]]
+    ):
+        """Count requests of this chunk with these inputs; raise once the bound is passed."""
+        digest = hashlib.sha1(f"{frame_from}:{frame_to}".encode())
+        for figures in timelines_figures:
+            for figure in figures:
+                digest.update(
+                    json.dumps(
+                        [figure.object_id, figure.geometry_type, figure.geometry, figure.meta],
+                        sort_keys=True,
+                        default=str,
+                    ).encode()
+                )
+        key = digest.hexdigest()
+        attempts = self._chunk_attempts.get(key, 0) + 1
+        self._chunk_attempts[key] = attempts
+        if attempts <= MAX_SAME_CHUNK_ATTEMPTS:
+            return
+        self.logger.error(
+            "The same chunk was requested %s times, stopping the track",
+            MAX_SAME_CHUNK_ATTEMPTS,
+            extra={
+                **self.logger_extra,
+                "frame_from": frame_from,
+                "frame_to": frame_to,
+                "timelines": [tl.log_data() for tl in self.timelines],
+            },
+        )
+        raise RuntimeError(
+            f"Tracking stopped: frames {frame_from}-{frame_to} were sent to the model "
+            f"{MAX_SAME_CHUNK_ATTEMPTS} times with the same objects without the track "
+            "moving past them."
+        )
 
     def predict_batch(
         self, frame_from: int, frame_to: int, timelines_figures: List[List[FigureInfo]]
@@ -1517,8 +1563,30 @@ class Track:
             self._remove_figures(figures_to_delete)
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
+        if bad_object_ids:
+            self._stop_objects(bad_object_ids)
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
+
+    def _stop_objects(self, object_ids: List[int]):
+        """Stop tracking objects whose predictions cannot be saved, e.g. deleted ones.
+
+        Tracking them further would only send more of their frames to the model
+        for results that are rejected again.
+        """
+        self._stopped_object_ids.update(object_ids)
+        self.logger.warning(
+            "Stopped tracking objects whose predictions could not be saved",
+            extra={**self.logger_extra, "stopped_object_ids": sorted(object_ids)},
+        )
+        utils.notify_warning(
+            self.api,
+            self.track_id,
+            self.video_id,
+            "Unable to save predictions for object ID(s) "
+            f"{', '.join(str(i) for i in sorted(object_ids))}. "
+            "Tracking stopped for these objects.",
+        )
 
     def _upload_iteration_and_update_timelines(
         self, frame_from, frame_to, timelines_indexes, predictions, transaction_id
@@ -1637,6 +1705,7 @@ class Track:
                     **self.logger_extra,
                 },
             )
+            self._count_chunk_attempt(frame_from, frame_to, timelines_figures)
 
             # load detections in parallel
             if self.is_detection_enabled():
