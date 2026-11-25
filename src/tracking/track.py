@@ -253,63 +253,62 @@ class Timeline:
         )
         disappear_by_distance_measure = disappear_by_distance.get("measure", 3)
 
-        for tracklet in self.tracklets:
-            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
-                last_areas = [
-                    tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())
-                ]
-                last_centers = [
-                    tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
-                ]
-                for frame_i, frame_predictions in enumerate(predictions):
-                    if len(frame_predictions) == 0:
-                        return predictions
-                    this_center = utils.get_figures_center(frame_predictions)
-                    this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
-                    small_area = False
-                    if disappear_by_area_enabled:
-                        small_area = utils.detect_size_shrinkage(
-                            this_area,
-                            last_areas,
-                            disappear_by_area_threshold,
-                            disappear_by_area_frames,
-                        )
-                    jumped = False
-                    if not small_area and disappear_by_distance_enabled:
-                        jumped = utils.detect_movement_anomaly(
-                            this_center,
-                            last_centers,
-                            multiplier=disappear_by_distance_multiplier,
-                            kalman_filter=self.track.kalman_filter,
-                            tracklet=tracklet,
-                            position_deviation=disappear_by_distance_position_deviation,
-                            velocity_deviation=disappear_by_distance_velocity_deviation,
-                            measure_deviation=disappear_by_distance_measure,
-                        )
-                    if small_area or jumped:
-                        for i in range(frame_i, len(predictions)):
-                            predictions[i] = []
-                        sly.logger.debug(
-                            "Object disappeared",
-                            extra={
-                                "timeline": self.log_data(),
-                                "reason": "small_area" if small_area else "jumped",
-                                "frame_index": frame_from + frame_i,
-                            },
-                        )
-                        if small_area:
-                            message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} as it has disappeared due to significant size reduction."
-                        elif jumped:
-                            message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} due to detected movement anomaly."
-                        utils.notify_warning(
-                            self.track.api,
-                            self.track.track_id,
-                            self.track.video_id,
-                            message=message,
-                        )
-                        return predictions
-                    last_areas.append(this_area)
+        # the tracklet the batch was taken from, the one update() gives these predictions to
+        tracklet = self._get_batch_tracklet(frame_from)
+        if tracklet is None:
+            return predictions
+        last_areas = [tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())]
+        last_centers = [
+            tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
+        ]
+        for frame_i, frame_predictions in enumerate(predictions):
+            if len(frame_predictions) == 0:
                 return predictions
+            this_center = utils.get_figures_center(frame_predictions)
+            this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
+            small_area = False
+            if disappear_by_area_enabled:
+                small_area = utils.detect_size_shrinkage(
+                    this_area,
+                    last_areas,
+                    disappear_by_area_threshold,
+                    disappear_by_area_frames,
+                )
+            jumped = False
+            if not small_area and disappear_by_distance_enabled:
+                jumped = utils.detect_movement_anomaly(
+                    this_center,
+                    last_centers,
+                    multiplier=disappear_by_distance_multiplier,
+                    kalman_filter=self.track.kalman_filter,
+                    tracklet=tracklet,
+                    position_deviation=disappear_by_distance_position_deviation,
+                    velocity_deviation=disappear_by_distance_velocity_deviation,
+                    measure_deviation=disappear_by_distance_measure,
+                )
+            if small_area or jumped:
+                for i in range(frame_i, len(predictions)):
+                    predictions[i] = []
+                sly.logger.debug(
+                    "Object disappeared",
+                    extra={
+                        "timeline": self.log_data(),
+                        "reason": "small_area" if small_area else "jumped",
+                        "frame_index": frame_from + frame_i,
+                    },
+                )
+                if small_area:
+                    message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} as it has disappeared due to significant size reduction."
+                elif jumped:
+                    message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} due to detected movement anomaly."
+                utils.notify_warning(
+                    self.track.api,
+                    self.track.track_id,
+                    self.track.video_id,
+                    message=message,
+                )
+                return predictions
+            last_areas.append(this_area)
         return predictions
 
     def absorb_covered_tracklets(self, tracklet: Tracklet):
