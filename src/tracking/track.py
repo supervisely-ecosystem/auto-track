@@ -94,10 +94,13 @@ class Tracklet:
             self.end_frame + 1,
             frame_to + 1,
         ):
-            if self.timeline.is_tracklet_boundary(i):
+            if i in self.timeline.key_figures:
+                break
+            if i in self.timeline.no_object_frames:
                 break
             end_frame = i
         self.end_frame = end_frame
+        self.timeline.absorb_covered_tracklets(self)
 
     def update(self, frame_index: int, figures: List[FigureInfo], stop=False):
         figures = [figure for figure in figures if not figure is None]
@@ -309,21 +312,33 @@ class Timeline:
                 return predictions
         return predictions
 
-    def is_tracklet_boundary(self, frame_index: int) -> bool:
-        """A tracklet ends before a frame drawn by hand, a no-object frame or another tracklet.
+    def absorb_covered_tracklets(self, tracklet: Tracklet):
+        """Remove the tracklets that start inside tracklet and track their frames from it.
 
-        The start of another tracklet has to count: its figure is often a prediction of an
-        earlier session (track_id set), so it is not in key_figures, and a tracklet that ran
-        over it would overlap it.
+        Only a frame drawn by hand or a no-object frame stops a tracklet. A tracklet starting
+        on a prediction, often of an earlier session (track_id set), is not in key_figures, so
+        another tracklet can run over its start: that prediction is overwritten like any other.
+        Keeping both would make them overlap, and predictions then went to the wrong one while
+        the other asked for the same chunk forever (#6328).
         """
-        if frame_index in self.key_figures or frame_index in self.no_object_frames:
-            return True
-        return any(tracklet.start_frame == frame_index for tracklet in self.tracklets)
+        if not any(t is tracklet for t in self.tracklets):
+            return  # already taken over itself
+        covered = [
+            t for t in self.tracklets if tracklet.start_frame < t.start_frame <= tracklet.end_frame
+        ]
+        if not covered:
+            return
+        for t in covered:
+            self.remove_tracklet(t.start_frame, clear=False)
+        # their frames were asked for too: track them from tracklet, up to the next boundary
+        tracklet.continue_tracklet(max(t.end_frame for t in covered))
 
     def _find_end_frame(self, start_frame: int, frames_count) -> int:
         end_frame = start_frame
         for i in range(start_frame + 1, start_frame + frames_count + 1):
-            if self.is_tracklet_boundary(i):
+            if i in self.key_figures:
+                break
+            if i in self.no_object_frames:
                 break
             end_frame = i
         return end_frame
@@ -418,12 +433,14 @@ class Timeline:
                 new_tracklet = Tracklet(self, frame_index, new_tracklet_end_frame, frame_figures)
                 self.tracklets.insert(i + 1, new_tracklet)
                 tracklet.cut(frame_index, remove_added_figures=True, except_last=True)
+                self.absorb_covered_tracklets(new_tracklet)
                 return
         # no intersections - insert new tracklet
         new_tracklet_end_frame = self._find_end_frame(frame_index, frames_count)
         new_tracklet = Tracklet(self, frame_index, new_tracklet_end_frame, frame_figures)
         self.tracklets.append(new_tracklet)
         self.tracklets.sort(key=lambda x: x.start_frame)
+        self.absorb_covered_tracklets(new_tracklet)
         self.track.logger.debug(
             "Timeline tracklets after update:",
             extra={**self.track.logger_extra, **self.log_data()},
