@@ -512,33 +512,38 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
-                {"field": "entityId", "operator": "=", "value": self.video_id},
+                {"field": "entityId", "operator": "=", "value": self.track.video_id},
             ],
         )
         key_frame_figures = find_key_figures(frame_figures)
         self.key_figures.update(key_frame_figures)
         if len(key_frame_figures.get(frame_index, [])) == 0:
-            del self.key_figures[frame_index]
+            self.key_figures.pop(frame_index, None)
 
         tracklets_to_remove = []
+        tracklets_to_continue = []
         for tracklet in self.tracklets:
             if tracklet.start_frame == frame_index:
                 if len(self.key_figures.get(frame_index, [])) == 0:
                     tracklets_to_remove.append(frame_index)
                     self.track.prevent_object_upload(
-                        self.object_id, (frame_index, (frame_index, tracklet.end_frame))
+                        self.object_id, (frame_index, tracklet.end_frame)
                     )
                 else:
                     self.track.prevent_object_upload(
-                        self.object_id, (frame_index, (frame_index, tracklet.end_frame))
+                        self.object_id, (frame_index, tracklet.end_frame)
                     )
                     tracklet.update(frame_index, self.key_figures.get(frame_index, []))
                     tracklet.clear(from_frame=frame_index + 1)
             elif tracklet.end_frame + 1 == frame_index:
-                tracklet.continue_tracklet(end_frame_for_current_range)
+                tracklets_to_continue.append(tracklet)
 
+        # Remove and clear first: a tracklet continued over one takes it over without clearing
+        # its predictions, which then stay wherever the continued tracklet stops early.
         for i in tracklets_to_remove:
             self.remove_tracklet(i, clear=True)
+        for tracklet in tracklets_to_continue:
+            tracklet.continue_tracklet(end_frame_for_current_range)
 
     def remove_tracklet(self, frame_index: int, clear=False):
         if clear:
