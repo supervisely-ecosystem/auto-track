@@ -18,6 +18,10 @@ import src.utils as utils
 import src.tracking.inference as inference
 from src.tracking.interpolation import interpolate_next
 
+# An object sent over the same frames again with no user update in between got the same
+# answer back last time and did not move past them, so its track is stuck, not slow.
+MAX_SAME_CHUNK_ATTEMPTS = 5
+
 
 def validate_nn_settings_for_geometry(
     nn_settings: Dict, geometry_name: str, raise_error: bool = True, logger: Logger = None
@@ -96,6 +100,7 @@ class Tracklet:
                 break
             end_frame = i
         self.end_frame = end_frame
+        self.timeline.absorb_covered_tracklets(self)
 
     def update(self, frame_index: int, figures: List[FigureInfo], stop=False):
         figures = [figure for figure in figures if not figure is None]
@@ -248,64 +253,84 @@ class Timeline:
         )
         disappear_by_distance_measure = disappear_by_distance.get("measure", 3)
 
-        for tracklet in self.tracklets:
-            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
-                last_areas = [
-                    tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())
-                ]
-                last_centers = [
-                    tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
-                ]
-                for frame_i, frame_predictions in enumerate(predictions):
-                    if len(frame_predictions) == 0:
-                        return predictions
-                    this_center = utils.get_figures_center(frame_predictions)
-                    this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
-                    small_area = False
-                    if disappear_by_area_enabled:
-                        small_area = utils.detect_size_shrinkage(
-                            this_area,
-                            last_areas,
-                            disappear_by_area_threshold,
-                            disappear_by_area_frames,
-                        )
-                    jumped = False
-                    if not small_area and disappear_by_distance_enabled:
-                        jumped = utils.detect_movement_anomaly(
-                            this_center,
-                            last_centers,
-                            multiplier=disappear_by_distance_multiplier,
-                            kalman_filter=self.track.kalman_filter,
-                            tracklet=tracklet,
-                            position_deviation=disappear_by_distance_position_deviation,
-                            velocity_deviation=disappear_by_distance_velocity_deviation,
-                            measure_deviation=disappear_by_distance_measure,
-                        )
-                    if small_area or jumped:
-                        for i in range(frame_i, len(predictions)):
-                            predictions[i] = []
-                        sly.logger.debug(
-                            "Object disappeared",
-                            extra={
-                                "timeline": self.log_data(),
-                                "reason": "small_area" if small_area else "jumped",
-                                "frame_index": frame_from + frame_i,
-                            },
-                        )
-                        if small_area:
-                            message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} as it has disappeared due to significant size reduction."
-                        elif jumped:
-                            message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} due to detected movement anomaly."
-                        utils.notify_warning(
-                            self.track.api,
-                            self.track.track_id,
-                            self.track.video_id,
-                            message=message,
-                        )
-                        return predictions
-                    last_areas.append(this_area)
+        # the tracklet the batch was taken from, the one update() gives these predictions to
+        tracklet = self._get_batch_tracklet(frame_from)
+        if tracklet is None:
+            return predictions
+        last_areas = [tracklet.area_hist[fr_idx] for fr_idx in sorted(tracklet.area_hist.keys())]
+        last_centers = [
+            tracklet.center_hist[fr_idx] for fr_idx in sorted(tracklet.center_hist.keys())
+        ]
+        for frame_i, frame_predictions in enumerate(predictions):
+            if len(frame_predictions) == 0:
                 return predictions
+            this_center = utils.get_figures_center(frame_predictions)
+            this_area = sum([utils.get_figure_area(figure) for figure in frame_predictions])
+            small_area = False
+            if disappear_by_area_enabled:
+                small_area = utils.detect_size_shrinkage(
+                    this_area,
+                    last_areas,
+                    disappear_by_area_threshold,
+                    disappear_by_area_frames,
+                )
+            jumped = False
+            if not small_area and disappear_by_distance_enabled:
+                jumped = utils.detect_movement_anomaly(
+                    this_center,
+                    last_centers,
+                    multiplier=disappear_by_distance_multiplier,
+                    kalman_filter=self.track.kalman_filter,
+                    tracklet=tracklet,
+                    position_deviation=disappear_by_distance_position_deviation,
+                    velocity_deviation=disappear_by_distance_velocity_deviation,
+                    measure_deviation=disappear_by_distance_measure,
+                )
+            if small_area or jumped:
+                for i in range(frame_i, len(predictions)):
+                    predictions[i] = []
+                sly.logger.debug(
+                    "Object disappeared",
+                    extra={
+                        "timeline": self.log_data(),
+                        "reason": "small_area" if small_area else "jumped",
+                        "frame_index": frame_from + frame_i,
+                    },
+                )
+                if small_area:
+                    message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} as it has disappeared due to significant size reduction."
+                elif jumped:
+                    message = f"[Off-Screen Detection]\nTracking stopped for object ID: {tracklet.timeline.object_id} due to detected movement anomaly."
+                utils.notify_warning(
+                    self.track.api,
+                    self.track.track_id,
+                    self.track.video_id,
+                    message=message,
+                )
+                return predictions
+            last_areas.append(this_area)
         return predictions
+
+    def absorb_covered_tracklets(self, tracklet: Tracklet):
+        """Remove the tracklets that start inside tracklet and track their frames from it.
+
+        Only a frame drawn by hand or a no-object frame stops a tracklet. A tracklet starting
+        on a prediction, often of an earlier session (track_id set), is not in key_figures, so
+        another tracklet can run over its start: that prediction is overwritten like any other.
+        Keeping both would make them overlap, and predictions then went to the wrong one while
+        the other asked for the same chunk forever (#6328).
+        """
+        if not any(t is tracklet for t in self.tracklets):
+            return  # already taken over itself
+        covered = [
+            t for t in self.tracklets if tracklet.start_frame < t.start_frame <= tracklet.end_frame
+        ]
+        if not covered:
+            return
+        for t in covered:
+            self.remove_tracklet(t.start_frame, clear=False)
+        # their frames were asked for too: track them from tracklet, up to the next boundary
+        tracklet.continue_tracklet(max(t.end_frame for t in covered))
 
     def _find_end_frame(self, start_frame: int, frames_count) -> int:
         end_frame = start_frame
@@ -353,6 +378,21 @@ class Timeline:
             return tracklet.get_batch(batch_size)
         return None, None, None  # all tracklets are finished
 
+    def _get_batch_tracklet(self, frame_from: int) -> Tracklet:
+        """The tracklet get_batch took a batch starting at frame_from from, if it still waits.
+
+        Its predictions belong to it alone. Picking a tracklet by frame range instead hands them
+        to an earlier, finished tracklet whenever two overlap, and the waiting tracklet then asks
+        for the same chunk forever (#6328).
+        """
+        for tracklet in self.tracklets:
+            if tracklet.is_finished():
+                continue
+            if tracklet.last_tracked[0] == frame_from:
+                return tracklet
+            return None
+        return None
+
     def object_changed(self, frame_index: int, frames_count: int):
         """One of the figures was changed or new figure was added"""
         frame_figures = self.track.api.video.figure.get_list(
@@ -392,12 +432,14 @@ class Timeline:
                 new_tracklet = Tracklet(self, frame_index, new_tracklet_end_frame, frame_figures)
                 self.tracklets.insert(i + 1, new_tracklet)
                 tracklet.cut(frame_index, remove_added_figures=True, except_last=True)
+                self.absorb_covered_tracklets(new_tracklet)
                 return
         # no intersections - insert new tracklet
         new_tracklet_end_frame = self._find_end_frame(frame_index, frames_count)
         new_tracklet = Tracklet(self, frame_index, new_tracklet_end_frame, frame_figures)
         self.tracklets.append(new_tracklet)
         self.tracklets.sort(key=lambda x: x.start_frame)
+        self.absorb_covered_tracklets(new_tracklet)
         self.track.logger.debug(
             "Timeline tracklets after update:",
             extra={**self.track.logger_extra, **self.log_data()},
@@ -469,33 +511,38 @@ class Timeline:
                 {"field": "objectId", "operator": "=", "value": self.object_id},
                 {"field": "startFrame", "operator": ">=", "value": frame_index},
                 {"field": "endFrame", "operator": "<=", "value": frame_index},
-                {"field": "entityId", "operator": "=", "value": self.video_id},
+                {"field": "entityId", "operator": "=", "value": self.track.video_id},
             ],
         )
         key_frame_figures = find_key_figures(frame_figures)
         self.key_figures.update(key_frame_figures)
         if len(key_frame_figures.get(frame_index, [])) == 0:
-            del self.key_figures[frame_index]
+            self.key_figures.pop(frame_index, None)
 
         tracklets_to_remove = []
+        tracklets_to_continue = []
         for tracklet in self.tracklets:
             if tracklet.start_frame == frame_index:
                 if len(self.key_figures.get(frame_index, [])) == 0:
                     tracklets_to_remove.append(frame_index)
                     self.track.prevent_object_upload(
-                        self.object_id, (frame_index, (frame_index, tracklet.end_frame))
+                        self.object_id, (frame_index, tracklet.end_frame)
                     )
                 else:
                     self.track.prevent_object_upload(
-                        self.object_id, (frame_index, (frame_index, tracklet.end_frame))
+                        self.object_id, (frame_index, tracklet.end_frame)
                     )
                     tracklet.update(frame_index, self.key_figures.get(frame_index, []))
                     tracklet.clear(from_frame=frame_index + 1)
             elif tracklet.end_frame + 1 == frame_index:
-                tracklet.continue_tracklet(end_frame_for_current_range)
+                tracklets_to_continue.append(tracklet)
 
+        # Remove and clear first: a tracklet continued over one takes it over without clearing
+        # its predictions, which then stay wherever the continued tracklet stops early.
         for i in tracklets_to_remove:
             self.remove_tracklet(i, clear=True)
+        for tracklet in tracklets_to_continue:
+            tracklet.continue_tracklet(end_frame_for_current_range)
 
     def remove_tracklet(self, frame_index: int, clear=False):
         if clear:
@@ -511,23 +558,23 @@ class Timeline:
             "Update timeline",
             extra={"timeline": self.log_data(), "frame_from": frame_from, "frame_to": frame_to},
         )
-        for tracklet in self.tracklets:
-            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
-                for frame_index in range(frame_from + 1, frame_to + 1):
-                    if len(predictions) == 0:
-                        tracklet.update(frame_index, [], stop=True)
-                        return
-                    figures = predictions.pop(0)
-                    figures = [figure for figure in figures if figure is not None]
-                    if figures is None:
-                        tracklet.update(frame_index, [], stop=True)
-                        return
-                    if len(figures) == 0:  # objects dissapear
-                        tracklet.update(frame_index, figures, stop=True)
-                        return
-                    else:
-                        tracklet.update(frame_index, figures)
+        tracklet = self._get_batch_tracklet(frame_from)
+        if tracklet is None:
+            return
+        for frame_index in range(frame_from + 1, min(frame_to, tracklet.end_frame) + 1):
+            if len(predictions) == 0:
+                tracklet.update(frame_index, [], stop=True)
                 return
+            figures = predictions.pop(0)
+            figures = [figure for figure in figures if figure is not None]
+            if figures is None:
+                tracklet.update(frame_index, [], stop=True)
+                return
+            if len(figures) == 0:  # objects dissapear
+                tracklet.update(frame_index, figures, stop=True)
+                return
+            else:
+                tracklet.update(frame_index, figures)
 
     def get_progress_total(self):
         total = 0
@@ -667,6 +714,9 @@ class Track:
         self.detections_cache = {}
         self.detection_enabled = detection_enabled
         self.disappear_enabled = disappear_enabled
+        # (object_id, frame_from, frame_to) -> requests since the last user update
+        self._chunk_attempts: Dict[Tuple[int, int, int], int] = {}
+        self._stopped_object_ids: Set[int] = set()
 
         self.no_object_tag_ids = [
             t.id
@@ -802,6 +852,13 @@ class Track:
         total = 0
         current = 0
         for timeline in self.timelines:
+            if timeline.object_id in self._stopped_object_ids:
+                # its frames are not tracked any more: count them as done, or current never
+                # reaches total (leaving them out makes progress go back, and 0/0 if all stop)
+                timeline_total = timeline.get_progress_total()
+                total += timeline_total
+                current += timeline_total
+                continue
             total += timeline.get_progress_total()
             current += timeline.get_progress_current()
         self.progress.total = total
@@ -811,7 +868,9 @@ class Track:
         if batch_size is None:
             batch_size = self.batch_size
         tl_batches = [
-            [*tl.get_batch(batch_size), tl_index] for tl_index, tl in enumerate(self.timelines)
+            [*tl.get_batch(batch_size), tl_index]
+            for tl_index, tl in enumerate(self.timelines)
+            if tl.object_id not in self._stopped_object_ids
         ]  # frame_from, frame_to, figures, tl_index
         tl_batches = [
             tl_batch for tl_batch in tl_batches if tl_batch[0] is not None and tl_batch[2]
@@ -902,6 +961,13 @@ class Track:
         )
         for update in pending_updates:
             self.apply_update(update)
+        if any(
+            update.type not in (Update.Type.CONTINUE, Update.Type.DELETE)
+            for update in pending_updates
+        ):
+            # A user edit may ask for a chunk again, e.g. re-tracking an unchanged object
+            # from the same frame. Only repeats with no edit in between mean a stuck track.
+            self._chunk_attempts.clear()
         self.refresh_progress()
         self.progress.notify()
 
@@ -1082,6 +1148,32 @@ class Track:
                         )
                     )
         return result
+
+    def _find_stuck_objects(
+        self, frame_from: int, frame_to: int, timelines_indexes: List[int]
+    ) -> List[int]:
+        """Count this chunk for each object in it; return the objects it was sent for too often."""
+        stuck_object_ids = []
+        for tl_index in timelines_indexes:
+            object_id = self.timelines[tl_index].object_id
+            key = (object_id, frame_from, frame_to)
+            attempts = self._chunk_attempts.get(key, 0) + 1
+            self._chunk_attempts[key] = attempts
+            if attempts > MAX_SAME_CHUNK_ATTEMPTS:
+                stuck_object_ids.append(object_id)
+        if stuck_object_ids:
+            self.logger.error(
+                "The same chunk was requested %s times for objects %s with no update in between",
+                MAX_SAME_CHUNK_ATTEMPTS,
+                stuck_object_ids,
+                extra={
+                    **self.logger_extra,
+                    "frame_from": frame_from,
+                    "frame_to": frame_to,
+                    "timelines": [self.timelines[i].log_data() for i in timelines_indexes],
+                },
+            )
+        return stuck_object_ids
 
     def predict_batch(
         self, frame_from: int, frame_to: int, timelines_figures: List[List[FigureInfo]]
@@ -1517,8 +1609,55 @@ class Track:
             self._remove_figures(figures_to_delete)
 
         uploaded_figures, bad_object_ids = self._safe_upload_figures(figures)
+        deleted_object_ids = self._find_deleted_objects(bad_object_ids)
+        if deleted_object_ids:
+            self._stop_objects(
+                deleted_object_ids,
+                "Unable to save predictions for object ID(s) {}: the objects no longer exist. "
+                "Tracking stopped for these objects.",
+            )
 
         self.withdraw_billing(transaction_id, items_count=len(uploaded_figures))
+
+    def _find_deleted_objects(self, object_ids: List[int]) -> List[int]:
+        """Objects of object_ids that no longer exist; a failed check finds none.
+
+        An upload can fail for a moment, so only a missing object is a reason to stop it.
+        """
+        if not object_ids:
+            return []
+        try:
+            existing = self.api.video.object.get_list(
+                dataset_id=self.dataset_id,
+                filters=[{"field": "id", "operator": "in", "value": object_ids}],
+            )
+        except Exception:
+            self.logger.warning(
+                "Unable to check whether objects %s exist",
+                object_ids,
+                exc_info=True,
+                extra=self.logger_extra,
+            )
+            return []
+        existing_ids = {object_info.id for object_info in existing}
+        return [object_id for object_id in object_ids if object_id not in existing_ids]
+
+    def _stop_objects(self, object_ids: List[int], message: str):
+        """Stop tracking these objects until the user tracks them again; others go on.
+
+        message is shown in the labeling tool, {} is replaced with the object IDs.
+        """
+        self._stopped_object_ids.update(object_ids)
+        message = message.format(", ".join(str(i) for i in sorted(object_ids)))
+        self.logger.warning(
+            "Stopped tracking objects: %s",
+            message,
+            extra={**self.logger_extra, "stopped_object_ids": sorted(object_ids)},
+        )
+        utils.notify_warning(self.api, self.track_id, self.video_id, message)
+        # nothing else may refresh it soon, e.g. when the stopped objects were the last ones
+        self.refresh_progress()
+        self.progress.notify()
 
     def _upload_iteration_and_update_timelines(
         self, frame_from, frame_to, timelines_indexes, predictions, transaction_id
@@ -1637,6 +1776,15 @@ class Track:
                     **self.logger_extra,
                 },
             )
+            stuck_object_ids = self._find_stuck_objects(frame_from, frame_to, timelines_indexes)
+            if stuck_object_ids:
+                self._stop_objects(
+                    stuck_object_ids,
+                    f"Tracking stopped for object ID(s) {{}}: frames {frame_from}-{frame_to} "
+                    f"were sent to the model {MAX_SAME_CHUNK_ATTEMPTS} times without the track "
+                    "moving past them.",
+                )
+                continue
 
             # load detections in parallel
             if self.is_detection_enabled():
@@ -1747,6 +1895,8 @@ class Track:
         )
         for obj_id in object_ids:
             self.prevent_object_upload(obj_id, (frame_index, self.video_info.frames_count))
+        # tracking them again is the user's call, even if they were stopped
+        self._stopped_object_ids.difference_update(object_ids)
         self.object_ids = list(set(self.object_ids + object_ids))
         frames_count = min(self.video_info.frames_count - frame_index, frames_count)
         self.frame_ranges.append((frame_index, frame_index + frames_count))
