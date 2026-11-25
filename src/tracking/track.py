@@ -853,7 +853,11 @@ class Track:
         current = 0
         for timeline in self.timelines:
             if timeline.object_id in self._stopped_object_ids:
-                # its frames are not tracked any more: counting them never lets current reach total
+                # its frames are not tracked any more: count them as done, or current never
+                # reaches total (leaving them out makes progress go back, and 0/0 if all stop)
+                timeline_total = timeline.get_progress_total()
+                total += timeline_total
+                current += timeline_total
                 continue
             total += timeline.get_progress_total()
             current += timeline.get_progress_current()
