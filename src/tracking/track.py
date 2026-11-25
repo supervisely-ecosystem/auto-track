@@ -97,9 +97,7 @@ class Tracklet:
             self.end_frame + 1,
             frame_to + 1,
         ):
-            if i in self.timeline.key_figures:
-                break
-            if i in self.timeline.no_object_frames:
+            if self.timeline.is_tracklet_boundary(i):
                 break
             end_frame = i
         self.end_frame = end_frame
@@ -314,12 +312,21 @@ class Timeline:
                 return predictions
         return predictions
 
+    def is_tracklet_boundary(self, frame_index: int) -> bool:
+        """A tracklet ends before a frame drawn by hand, a no-object frame or another tracklet.
+
+        The start of another tracklet has to count: its figure is often a prediction of an
+        earlier session (track_id set), so it is not in key_figures, and a tracklet that ran
+        over it would overlap it.
+        """
+        if frame_index in self.key_figures or frame_index in self.no_object_frames:
+            return True
+        return any(tracklet.start_frame == frame_index for tracklet in self.tracklets)
+
     def _find_end_frame(self, start_frame: int, frames_count) -> int:
         end_frame = start_frame
         for i in range(start_frame + 1, start_frame + frames_count + 1):
-            if i in self.key_figures:
-                break
-            if i in self.no_object_frames:
+            if self.is_tracklet_boundary(i):
                 break
             end_frame = i
         return end_frame
@@ -359,6 +366,21 @@ class Timeline:
                 continue
             return tracklet.get_batch(batch_size)
         return None, None, None  # all tracklets are finished
+
+    def _get_batch_tracklet(self, frame_from: int) -> Tracklet:
+        """The tracklet get_batch took a batch starting at frame_from from, if it still waits.
+
+        Its predictions belong to it alone. Picking a tracklet by frame range instead hands them
+        to an earlier, finished tracklet whenever two overlap, and the waiting tracklet then asks
+        for the same chunk forever (#6328).
+        """
+        for tracklet in self.tracklets:
+            if tracklet.is_finished():
+                continue
+            if tracklet.last_tracked[0] == frame_from:
+                return tracklet
+            return None
+        return None
 
     def object_changed(self, frame_index: int, frames_count: int):
         """One of the figures was changed or new figure was added"""
@@ -518,23 +540,23 @@ class Timeline:
             "Update timeline",
             extra={"timeline": self.log_data(), "frame_from": frame_from, "frame_to": frame_to},
         )
-        for tracklet in self.tracklets:
-            if tracklet.start_frame <= frame_from <= tracklet.end_frame:
-                for frame_index in range(frame_from + 1, frame_to + 1):
-                    if len(predictions) == 0:
-                        tracklet.update(frame_index, [], stop=True)
-                        return
-                    figures = predictions.pop(0)
-                    figures = [figure for figure in figures if figure is not None]
-                    if figures is None:
-                        tracklet.update(frame_index, [], stop=True)
-                        return
-                    if len(figures) == 0:  # objects dissapear
-                        tracklet.update(frame_index, figures, stop=True)
-                        return
-                    else:
-                        tracklet.update(frame_index, figures)
+        tracklet = self._get_batch_tracklet(frame_from)
+        if tracklet is None:
+            return
+        for frame_index in range(frame_from + 1, min(frame_to, tracklet.end_frame) + 1):
+            if len(predictions) == 0:
+                tracklet.update(frame_index, [], stop=True)
                 return
+            figures = predictions.pop(0)
+            figures = [figure for figure in figures if figure is not None]
+            if figures is None:
+                tracklet.update(frame_index, [], stop=True)
+                return
+            if len(figures) == 0:  # objects dissapear
+                tracklet.update(frame_index, figures, stop=True)
+                return
+            else:
+                tracklet.update(frame_index, figures)
 
     def get_progress_total(self):
         total = 0
