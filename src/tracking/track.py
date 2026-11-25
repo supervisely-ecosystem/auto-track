@@ -848,6 +848,9 @@ class Track:
         total = 0
         current = 0
         for timeline in self.timelines:
+            if timeline.object_id in self._stopped_object_ids:
+                # its frames are not tracked any more: counting them never lets current reach total
+                continue
             total += timeline.get_progress_total()
             current += timeline.get_progress_current()
         self.progress.total = total
@@ -1644,6 +1647,9 @@ class Track:
             extra={**self.logger_extra, "stopped_object_ids": sorted(object_ids)},
         )
         utils.notify_warning(self.api, self.track_id, self.video_id, message)
+        # nothing else may refresh it soon, e.g. when the stopped objects were the last ones
+        self.refresh_progress()
+        self.progress.notify()
 
     def _upload_iteration_and_update_timelines(
         self, frame_from, frame_to, timelines_indexes, predictions, transaction_id
